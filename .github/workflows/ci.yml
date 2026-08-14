@@ -12,9 +12,13 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
+
+      - name: Make Maven Wrapper executable
+        run: chmod +x mvnw
 
       - name: Set up Java 21
         uses: actions/setup-java@v5
