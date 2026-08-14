@@ -1,0 +1,28 @@
+# Maven
+target/
+
+# Runtime logs
+logs/
+*.log
+
+# IntelliJ IDEA
+.idea/
+*.iml
+*.iws
+*.ipr
+
+# Visual Studio Code
+.vscode/
+
+# Eclipse
+.classpath
+.project
+.settings/
+
+# Operating systems
+.DS_Store
+Thumbs.db
+
+# Local environment
+.env
+*.local
