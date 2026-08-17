@@ -1,10 +1,10 @@
 # Summer Camp Project
 
-这是六人暑期夏令营小组的 Java 项目骨架，使用 Maven 管理依赖，并通过 SLF4J + Logback 提供统一的多级日志能力。
+这是一个基于 Java 21、Spring Boot 和 Maven 的暑期夏令营项目。项目使用 Spring 容器管理组件，并通过 SLF4J + Logback 提供统一的多级日志能力。
 
 ## 环境要求
 
-- JDK 21 或更高版本
+- JDK 21
 - Git
 - 不需要预先安装 Maven，项目自带 Maven Wrapper
 
@@ -16,15 +16,19 @@
 # Windows：编译并运行测试
 .\mvnw.cmd clean verify
 
-# Windows：运行日志示例
-.\mvnw.cmd exec:java
+# Windows：启动 Spring Boot
+.\mvnw.cmd spring-boot:run
+
+# Windows：运行构建后的可执行 JAR
+java -jar target\summer-camp-project-1.0.0-SNAPSHOT.jar
 ```
 
 Linux 或 macOS 使用：
 
 ```bash
 ./mvnw clean verify
-./mvnw exec:java
+./mvnw spring-boot:run
+java -jar target/summer-camp-project-1.0.0-SNAPSHOT.jar
 ```
 
 ## 日志
@@ -47,12 +51,12 @@ LOGGER.error("功能执行失败", exception);
 ```powershell
 # Windows PowerShell
 $env:LOG_LEVEL = "DEBUG"
-.\mvnw.cmd exec:java
+.\mvnw.cmd spring-boot:run
 ```
 
 ```bash
 # Linux / macOS
-LOG_LEVEL=DEBUG ./mvnw exec:java
+LOG_LEVEL=DEBUG ./mvnw spring-boot:run
 ```
 
 ## 项目结构
@@ -60,8 +64,8 @@ LOG_LEVEL=DEBUG ./mvnw exec:java
 ```text
 src/
 ├── main/
-│   ├── java/com/summercamp/project/   # 项目代码
-│   └── resources/logback.xml          # 日志配置
+│   ├── java/com/summercamp/project/   # Spring Boot 项目代码
+│   └── resources/logback-spring.xml   # Spring Boot 日志配置
 └── test/
     └── java/com/summercamp/project/   # 测试代码
 ```
@@ -72,6 +76,10 @@ src/
 2. 每次提交只完成一个清晰目标，提交信息说明“做了什么”。
 3. 推送功能分支并发起 Pull Request，请至少一名组员检查后再合并。
 4. 合并前确保本地测试和 GitHub Actions 均通过。
+
+## Spring Boot
+
+程序入口 `com.summercamp.project.Application` 使用 `@SpringBootApplication` 启动 Spring 容器。当前项目是非 Web 模式，不会启动内嵌服务器；后续需要提供 HTTP 接口时，可以加入 `spring-boot-starter-web`。
 
 ## 许可证
 

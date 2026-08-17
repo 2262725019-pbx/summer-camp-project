@@ -7,13 +7,25 @@ import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
 import java.util.List;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
 
+@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.NONE)
 class ApplicationTest {
 
+    @Autowired
+    private Application application;
+
+    @BeforeEach
+    void verifyContextStarted() {
+        org.junit.jupiter.api.Assertions.assertNotNull(application);
+    }
+
     @Test
-    void shouldEmitAllSupportedLogLevels() {
+    void shouldEmitAllSupportedLogLevels() throws Exception {
         Logger logger = (Logger) LoggerFactory.getLogger(Application.class);
         Level originalLevel = logger.getLevel();
         ListAppender<ILoggingEvent> appender = new ListAppender<>();
@@ -22,7 +34,7 @@ class ApplicationTest {
         logger.setLevel(Level.DEBUG);
         logger.addAppender(appender);
         try {
-            Application.main(new String[0]);
+            application.run();
         } finally {
             logger.detachAppender(appender);
             logger.setLevel(originalLevel);
