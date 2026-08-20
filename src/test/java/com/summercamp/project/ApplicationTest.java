@@ -47,4 +47,30 @@ class ApplicationTest {
 
         assertEquals(List.of(Level.DEBUG, Level.INFO, Level.WARN, Level.ERROR), levels);
     }
+<<<<<<< main
+=======
+
+    @Test
+    void shouldUseFreeEdgeTextToSpeechByDefault() {
+        assertInstanceOf(EdgeTextToSpeechClient.class, textToSpeechClient);
+    }
+
+    @Test
+    void shouldRegisterAllBotTools() {
+        assertEquals(
+                List.of(
+                        "add_todo",
+                        "calculate",
+                        "clear_memory",
+                        "complete_todo",
+                        "generate_image",
+                        "generate_qr_code",
+                        "get_current_datetime",
+                        "get_weather",
+                        "list_todos"),
+                toolRegistry.definitions().stream()
+                        .map(definition -> definition.name())
+                        .toList());
+    }
+>>>>>>> local
 }
