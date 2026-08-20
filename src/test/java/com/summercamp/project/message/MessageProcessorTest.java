@@ -29,6 +29,7 @@ import com.summercamp.project.weather.WeatherPeriod;
 import com.summercamp.project.weather.WeatherReport;
 import com.summercamp.project.wechat.InboundMessage;
 import com.summercamp.project.wechat.WechatGateway;
+import java.io.IOException;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
@@ -282,6 +283,30 @@ class MessageProcessorTest {
     }
 
     @Test
+    void shouldFallBackToOriginalTextWhenSynthesizedVoiceSendFails() {
+        gateway.failVoice = true;
+
+        processor.process(new InboundMessage(
+                "voice-send-fallback",
+                "user-a",
+                "",
+                List.of(),
+                List.of(new VoiceInput(
+                        new byte[] {1},
+                        "镇江现在天气怎么样？",
+                        6,
+                        16,
+                        24_000,
+                        1_000)),
+                false,
+                false,
+                false));
+
+        assertTrue(gateway.sentVoices.isEmpty());
+        assertEquals(List.of("reply-1"), gateway.sentTexts);
+    }
+
+    @Test
     void shouldSplitLongSpeechAtChinesePunctuation() {
         String longAnswer = "甲".repeat(700) + "。" + "乙".repeat(700);
 
@@ -416,6 +441,7 @@ class MessageProcessorTest {
         private final List<String> sentTexts = new ArrayList<>();
         private final List<byte[]> sentImages = new ArrayList<>();
         private final List<byte[]> sentVoices = new ArrayList<>();
+        private boolean failVoice;
 
         @Override
         public void loginAndWait(Path qrCodePath) {
@@ -445,7 +471,10 @@ class MessageProcessorTest {
                 int sampleRate,
                 int encodeType,
                 int bitsPerSample,
-                String transcript) {
+                String transcript) throws IOException {
+            if (failVoice) {
+                throw new IOException("voice send failed");
+            }
             sentVoices.add(data.clone());
         }
 
