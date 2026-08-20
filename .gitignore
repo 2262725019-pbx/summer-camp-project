@@ -3,6 +3,7 @@ target/
 
 # Runtime logs
 logs/
+runtime/
 *.log
 
 # IntelliJ IDEA
@@ -26,3 +27,4 @@ Thumbs.db
 # Local environment
 .env
 *.local
+/config/application-local.properties

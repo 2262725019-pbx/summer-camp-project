@@ -1,8 +1,5 @@
 # Summer Camp Project
 
-<<<<<<< main
-这是一个基于 Java 21、Spring Boot 和 Maven 的暑期夏令营项目。项目使用 Spring 容器管理组件，并通过 SLF4J + Logback 提供统一的多级日志能力。
-=======
 这是一个 Java 21 + Spring Boot 的非 Web 微信 AI 机器人项目。项目通过微信 iLink SDK 收发消息，通过智谱开放平台完成连续对话、图片和语音识别，使用免费的 Microsoft Edge 在线朗读服务生成回复语音，并通过高德 Web 服务提供准确的中国行政区天气。
 
 ## 已实现功能
@@ -21,22 +18,44 @@
 - 上下文 30 分钟无新消息后自动过期，可用 `/clear` 主动清除
 - SLF4J + Logback 多级日志、日志滚动和自动化测试
 - GitHub Actions 在 Java 21 环境执行完整验证
->>>>>>> local
 
 ## 环境要求
 
 - JDK 21
 - Git
+- 一个智谱开放平台账号及 API Key
+- 一个高德开放平台“Web 服务”类型的 Key（只在使用天气功能时需要）
 - 不需要预先安装 Maven，项目自带 Maven Wrapper
 
-## 快速开始
+微信 SDK 通过 Maven 引入：`io.github.lith0924:wechat-ilink-sdk:2.3.3`。
 
-克隆项目后，在项目根目录执行：
+## 配置
+
+### IDEA 直接运行（推荐）
+
+打开本地配置文件 [config/application-local.properties](config/application-local.properties)，填写智谱和高德两个 Key：
+
+```properties
+ai.zhipu.api-key=你的新智谱API Key
+weather.amap.api-key=你的高德Web服务Key
+```
+
+高德 Key 的类型必须选择“Web 服务”，不能选择 Android、iOS 或 Web JS。暂时不查询天气时，高德 Key 可以先保留占位符，其他聊天能力仍可使用。
+
+然后在 IDEA 中打开 `src/main/java/com/summercamp/project/Application.java`，点击 `main` 方法旁边的绿色运行按钮。程序会自动：
+
+1. 启动微信机器人；
+2. 生成 `runtime/wechat-login-qr.png`；
+3. 使用 Windows 默认图片查看器打开二维码；
+4. 扫码成功后删除二维码并开始接收消息。
+
+`config/application-local.properties` 已被 `.gitignore` 忽略，不能提交到 GitHub。团队成员可以复制 `config/application-local.properties.example` 建立各自的本地配置。
+
+### 终端运行（可选）
+
+普通构建和测试不会访问微信或智谱。如果临时使用终端环境变量覆盖本地配置，可以设置：
 
 ```powershell
-<<<<<<< main
-# Windows：编译并运行测试
-=======
 $env:ZHIPU_API_KEY = "你的智谱API Key"
 $env:BOT_ENABLED = "true"
 ```
@@ -89,17 +108,16 @@ Windows：
 
 ```powershell
 # 编译并运行全部测试
->>>>>>> local
 .\mvnw.cmd clean verify
 
-# Windows：启动 Spring Boot
+# 启动机器人
 .\mvnw.cmd spring-boot:run
 
-# Windows：运行构建后的可执行 JAR
+# 或先构建，再运行可执行 JAR
 java -jar target\summer-camp-project-1.0.0-SNAPSHOT.jar
 ```
 
-Linux 或 macOS 使用：
+Linux 或 macOS：
 
 ```bash
 ./mvnw clean verify
@@ -107,8 +125,6 @@ Linux 或 macOS 使用：
 java -jar target/summer-camp-project-1.0.0-SNAPSHOT.jar
 ```
 
-<<<<<<< main
-=======
 启动后，项目会在 `runtime/wechat-login-qr.png` 生成微信登录二维码。打开图片并在 3 分钟内扫码确认；登录成功后二维码文件会自动删除。机器人只有收到某个用户的消息后，才具备向该用户回复所需的微信上下文。
 
 ## 微信命令
@@ -175,46 +191,20 @@ Function Calling 的作用是让模型决定“需要调用哪个函数以及传
 - 个人待办按微信用户保存在内存中，每人最多 100 项，程序重启后清空。
 - 对话历史由项目主动随请求发送给智谱，项目不依赖模型平台的服务端会话状态。
 
->>>>>>> local
 ## 日志
 
-业务代码统一依赖 SLF4J 的 `Logger` 接口，不直接依赖具体日志实现：
-
-```java
-private static final Logger LOGGER = LoggerFactory.getLogger(YourClass.class);
-
-LOGGER.debug("调试信息");
-LOGGER.info("普通运行信息");
-LOGGER.warn("需要关注的情况");
-LOGGER.error("功能执行失败", exception);
-```
-
-默认日志级别是 `INFO`，日志会同时写入控制台和 `logs/application.log`。日志按天或达到 10 MB 时滚动，保留 14 天，总量最多 200 MB。
+业务代码统一依赖 SLF4J 的 `Logger` 接口，不直接依赖具体日志实现。默认日志级别是 `INFO`，日志同时写入控制台和 `logs/application.log`。日志按天或达到 10 MB 时滚动，保留 14 天，总量最多 200 MB。
 
 临时启用 `DEBUG` 日志：
 
 ```powershell
-# Windows PowerShell
 $env:LOG_LEVEL = "DEBUG"
 .\mvnw.cmd spring-boot:run
 ```
 
-```bash
-# Linux / macOS
-LOG_LEVEL=DEBUG ./mvnw spring-boot:run
-```
-
-## 项目结构
+## 主要代码结构
 
 ```text
-<<<<<<< main
-src/
-├── main/
-│   ├── java/com/summercamp/project/   # Spring Boot 项目代码
-│   └── resources/logback-spring.xml   # Spring Boot 日志配置
-└── test/
-    └── java/com/summercamp/project/   # 测试代码
-=======
 src/main/java/com/summercamp/project/
 ├── Application.java                  # Spring Boot 入口
 ├── config/                           # 环境变量与客户端配置
@@ -226,19 +216,14 @@ src/main/java/com/summercamp/project/
 ├── tool/                             # 统一工具框架、Schema 校验及 9 个本地工具
 ├── weather/                          # 高德行政区解析和天气固定模板
 └── wechat/                           # iLink SDK 适配与微信收发
->>>>>>> local
 ```
 
 ## 团队协作建议
 
-1. 从 `main` 拉取最新代码后创建个人功能分支，例如 `feature/login`。
-2. 每次提交只完成一个清晰目标，提交信息说明“做了什么”。
-3. 推送功能分支并发起 Pull Request，请至少一名组员检查后再合并。
-4. 合并前确保本地测试和 GitHub Actions 均通过。
-
-## Spring Boot
-
-程序入口 `com.summercamp.project.Application` 使用 `@SpringBootApplication` 启动 Spring 容器。当前项目是非 Web 模式，不会启动内嵌服务器；后续需要提供 HTTP 接口时，可以加入 `spring-boot-starter-web`。
+1. 从 `main` 拉取最新代码后创建功能分支，例如 `feature/image-recognition`。
+2. 每次提交只完成一个清晰目标，并补充相应测试。
+3. 推送功能分支并发起 Pull Request，请至少一名成员检查后再合并。
+4. 合并前确保本地 `clean verify` 和 GitHub Actions 均通过。
 
 ## 许可证
 

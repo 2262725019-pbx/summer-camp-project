@@ -1,11 +1,15 @@
 package com.summercamp.project;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 
 import ch.qos.logback.classic.Level;
 import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
+import com.summercamp.project.speech.EdgeTextToSpeechClient;
+import com.summercamp.project.speech.TextToSpeechClient;
+import com.summercamp.project.tool.ToolRegistry;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -13,11 +17,19 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.NONE)
+@SpringBootTest(
+        webEnvironment = SpringBootTest.WebEnvironment.NONE,
+        properties = "bot.enabled=false")
 class ApplicationTest {
 
     @Autowired
     private Application application;
+
+    @Autowired
+    private TextToSpeechClient textToSpeechClient;
+
+    @Autowired
+    private ToolRegistry toolRegistry;
 
     @BeforeEach
     void verifyContextStarted() {
@@ -47,8 +59,6 @@ class ApplicationTest {
 
         assertEquals(List.of(Level.DEBUG, Level.INFO, Level.WARN, Level.ERROR), levels);
     }
-<<<<<<< main
-=======
 
     @Test
     void shouldUseFreeEdgeTextToSpeechByDefault() {
@@ -72,5 +82,4 @@ class ApplicationTest {
                         .map(definition -> definition.name())
                         .toList());
     }
->>>>>>> local
 }
