@@ -44,6 +44,9 @@ class ToolRegistryTest {
         assertFalse(weather.parameters().path("additionalProperties").asBoolean(true));
         assertEquals(5, weather.parameters().path("properties")
                 .path("period").path("enum").size());
+        assertTrue(registry.isParallelSafe("calculate"));
+        assertTrue(registry.isParallelSafe("get_weather"));
+        assertFalse(registry.isParallelSafe("unknown_tool"));
     }
 
     @Test

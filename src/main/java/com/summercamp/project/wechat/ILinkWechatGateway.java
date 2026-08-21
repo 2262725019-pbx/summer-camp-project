@@ -2,7 +2,6 @@ package com.summercamp.project.wechat;
 
 import com.github.wechat.ilink.sdk.ILinkClient;
 import com.github.wechat.ilink.sdk.core.config.ILinkConfig;
-import com.github.wechat.ilink.sdk.core.exception.ILinkException;
 import com.github.wechat.ilink.sdk.core.exception.SessionExpiredException;
 import com.github.wechat.ilink.sdk.core.model.MessageItem;
 import com.github.wechat.ilink.sdk.core.model.VoiceItem;
@@ -25,7 +24,6 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.DisposableBean;
 import org.springframework.stereotype.Component;
 
@@ -39,14 +37,12 @@ public class ILinkWechatGateway implements WechatGateway, DisposableBean {
     private final AtomicBoolean closed = new AtomicBoolean();
     private Path activeQrCodePath;
 
-    @Autowired
     public ILinkWechatGateway(BotProperties properties) {
-        this(properties, createClient());
-    }
-
-    ILinkWechatGateway(BotProperties properties, ILinkClient client) {
         this.properties = properties;
-        this.client = client;
+        ILinkConfig config = ILinkConfig.builder()
+                .heartbeatEnabled(false)
+                .build();
+        this.client = ILinkClient.builder().config(config).build();
     }
 
     @Override
@@ -90,21 +86,13 @@ public class ILinkWechatGateway implements WechatGateway, DisposableBean {
 
     @Override
     public void sendText(String userId, String text) throws IOException {
-        try {
-            client.sendText(userId, text);
-        } catch (ILinkException exception) {
-            throw messageSendFailure(exception);
-        }
+        client.sendText(userId, text);
     }
 
     @Override
     public void sendImage(String userId, byte[] data, String fileName, String caption)
             throws IOException {
-        try {
-            client.sendImage(userId, data, fileName, caption);
-        } catch (ILinkException exception) {
-            throw messageSendFailure(exception);
-        }
+        client.sendImage(userId, data, fileName, caption);
     }
 
     @Override
@@ -117,37 +105,22 @@ public class ILinkWechatGateway implements WechatGateway, DisposableBean {
             int encodeType,
             int bitsPerSample,
             String transcript) throws IOException {
-        try {
-            if (properties.sendVoiceAsFile()) {
-                client.sendFile(userId, data, playableAudioFileName(fileName, encodeType), "");
-                LOGGER.info("iLink 原生语音气泡当前投递不稳定，已将回复作为可播放音频文件发送");
-                return;
-            }
-            client.sendVoice(
-                    userId,
-                    data,
-                    fileName,
-                    durationMillis,
-                    sampleRate,
-                    null,
-                    encodeType,
-                    bitsPerSample,
-                    transcript);
-            LOGGER.warn("已向 iLink 提交原生语音气泡；接口成功不代表微信客户端一定完成投递");
-        } catch (ILinkException exception) {
-            throw messageSendFailure(exception);
+        if (properties.sendVoiceAsFile()) {
+            client.sendFile(userId, data, playableAudioFileName(fileName, encodeType), "");
+            LOGGER.info("iLink 原生语音气泡当前投递不稳定，已将回复作为可播放音频文件发送");
+            return;
         }
-    }
-
-    private static ILinkClient createClient() {
-        ILinkConfig config = ILinkConfig.builder()
-                .heartbeatEnabled(false)
-                .build();
-        return ILinkClient.builder().config(config).build();
-    }
-
-    private IOException messageSendFailure(ILinkException exception) {
-        return new IOException("微信消息发送失败", exception);
+        client.sendVoice(
+                userId,
+                data,
+                fileName,
+                durationMillis,
+                sampleRate,
+                null,
+                encodeType,
+                bitsPerSample,
+                transcript);
+        LOGGER.warn("已向 iLink 提交原生语音气泡；接口成功不代表微信客户端一定完成投递");
     }
 
     private String playableAudioFileName(String fileName, int encodeType) {

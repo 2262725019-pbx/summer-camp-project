@@ -33,6 +33,11 @@ public class WeatherTool implements BotTool {
     }
 
     @Override
+    public boolean parallelSafe() {
+        return true;
+    }
+
+    @Override
     public ToolResult execute(JsonNode arguments, ToolContext context) {
         String location = arguments.path("location").asText().strip();
         if (location.isBlank()) {

@@ -34,6 +34,10 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.stream.Stream;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -59,6 +63,8 @@ public class ZhipuAiClient implements
             用户问当前日期、时间或星期时调用 get_current_datetime。
             待办事项依次使用 add_todo、list_todos、complete_todo，并保持当前微信用户的数据隔离。
             用户要求清除上下文时调用 clear_memory；要求二维码时调用 generate_qr_code。
+            用户要求把计算结果生成二维码时，必须依次调用 calculate、create_result_page，
+            再把 create_result_page 返回的 url 作为 text 调用 generate_qr_code；不要直接把数值写入二维码。
             generate_image 和 generate_qr_code 会产生真实图片，不要声称图片无法发送。
             复杂任务可以连续调用多个工具，后一步可以依据前一步的工具结果继续执行。
             工具返回 success=false 时，简洁说明失败原因；天气工具成功时必须保持数值和发布时间准确。
@@ -144,27 +150,80 @@ public class ZhipuAiClient implements
                 throw new LlmException("模型连续请求工具，超过最大调用轮数");
             }
             appendAssistantToolRequest(payload, response);
-            for (ModelToolCall toolCall : toolCalls) {
-                LOGGER.info("模型请求调用工具：{}", toolCall.name());
-                ToolRegistry.Invocation invocation = toolRegistry.invoke(
-                        toolCall.name(), toolCall.arguments(), context);
-                ToolResult result = invocation.result();
-                if (invocation.success()) {
-                    if (result instanceof ToolResult.Completed completed) {
-                        return new ChatOutcome(completed.reply(), media);
-                    }
-                    if (result instanceof ToolResult.Image image) {
-                        media.add(new ChatOutcome.Media(
-                                image.data(), image.fileName(), image.caption()));
+            if (canRunInParallel(toolCalls)) {
+                LOGGER.info("第 {} 轮并行执行 {} 个独立工具", round + 1, toolCalls.size());
+                List<ToolRegistry.Invocation> invocations = invokeToolsInParallel(toolCalls, context);
+                for (int index = 0; index < toolCalls.size(); index++) {
+                    ChatOutcome completed = applyToolInvocation(
+                            payload, toolCalls.get(index), invocations.get(index), media);
+                    if (completed != null) {
+                        return completed;
                     }
                 }
-                payload.withArray("messages").addObject()
-                        .put("role", "tool")
-                        .put("tool_call_id", toolCall.id())
-                        .put("content", invocation.modelContent());
+            } else {
+                LOGGER.info("第 {} 轮串行执行 {} 个工具", round + 1, toolCalls.size());
+                for (ModelToolCall toolCall : toolCalls) {
+                    ToolRegistry.Invocation invocation = invokeTool(toolCall, context);
+                    ChatOutcome completed = applyToolInvocation(
+                            payload, toolCall, invocation, media);
+                    if (completed != null) {
+                        return completed;
+                    }
+                }
             }
         }
         throw new LlmException("模型工具调用没有产生最终回答");
+    }
+
+    private boolean canRunInParallel(List<ModelToolCall> toolCalls) {
+        return toolCalls.size() > 1
+                && toolCalls.stream().allMatch(call -> toolRegistry.isParallelSafe(call.name()));
+    }
+
+    private List<ToolRegistry.Invocation> invokeToolsInParallel(
+            List<ModelToolCall> toolCalls,
+            ToolContext context) {
+        try (ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor()) {
+            List<Future<ToolRegistry.Invocation>> futures = toolCalls.stream()
+                    .map(call -> executor.submit(() -> invokeTool(call, context)))
+                    .toList();
+            List<ToolRegistry.Invocation> invocations = new ArrayList<>(futures.size());
+            for (Future<ToolRegistry.Invocation> future : futures) {
+                invocations.add(future.get());
+            }
+            return List.copyOf(invocations);
+        } catch (InterruptedException exception) {
+            Thread.currentThread().interrupt();
+            throw new LlmException("并行工具执行被中断", exception);
+        } catch (ExecutionException exception) {
+            throw new LlmException("并行工具执行异常", exception.getCause());
+        }
+    }
+
+    private ToolRegistry.Invocation invokeTool(ModelToolCall toolCall, ToolContext context) {
+        LOGGER.info("模型请求调用工具：{}", toolCall.name());
+        return toolRegistry.invoke(toolCall.name(), toolCall.arguments(), context);
+    }
+
+    private ChatOutcome applyToolInvocation(
+            ObjectNode payload,
+            ModelToolCall toolCall,
+            ToolRegistry.Invocation invocation,
+            List<ChatOutcome.Media> media) {
+        ToolResult result = invocation.result();
+        if (invocation.success()) {
+            if (result instanceof ToolResult.Completed completed) {
+                return new ChatOutcome(completed.reply(), media);
+            }
+            if (result instanceof ToolResult.Image image) {
+                media.add(new ChatOutcome.Media(image.data(), image.fileName(), image.caption()));
+            }
+        }
+        payload.withArray("messages").addObject()
+                .put("role", "tool")
+                .put("tool_call_id", toolCall.id())
+                .put("content", invocation.modelContent());
+        return null;
     }
 
     @Override

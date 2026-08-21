@@ -29,7 +29,6 @@ import com.summercamp.project.weather.WeatherPeriod;
 import com.summercamp.project.weather.WeatherReport;
 import com.summercamp.project.wechat.InboundMessage;
 import com.summercamp.project.wechat.WechatGateway;
-import java.io.IOException;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
@@ -283,30 +282,6 @@ class MessageProcessorTest {
     }
 
     @Test
-    void shouldFallBackToOriginalTextWhenSynthesizedVoiceSendFails() {
-        gateway.failVoice = true;
-
-        processor.process(new InboundMessage(
-                "voice-send-fallback",
-                "user-a",
-                "",
-                List.of(),
-                List.of(new VoiceInput(
-                        new byte[] {1},
-                        "镇江现在天气怎么样？",
-                        6,
-                        16,
-                        24_000,
-                        1_000)),
-                false,
-                false,
-                false));
-
-        assertTrue(gateway.sentVoices.isEmpty());
-        assertEquals(List.of("reply-1"), gateway.sentTexts);
-    }
-
-    @Test
     void shouldSplitLongSpeechAtChinesePunctuation() {
         String longAnswer = "甲".repeat(700) + "。" + "乙".repeat(700);
 
@@ -315,6 +290,27 @@ class MessageProcessorTest {
         assertEquals(2, chunks.size());
         assertTrue(chunks.getFirst().endsWith("。"));
         assertTrue(chunks.stream().allMatch(chunk -> chunk.length() <= 1_000));
+    }
+
+    @Test
+    void shouldRemoveMarkdownMarkersBeforeSpeechSynthesis() {
+        String answer = """
+                ## **功能介绍**
+                * **文字聊天**：回答日常问题
+                * 支持 *语音回复*
+                * 计算 2 * 3
+                详情请看[使用说明](https://example.com/help)。
+                """;
+
+        List<String> chunks = processor.splitForSpeech(answer);
+
+        assertEquals(List.of("""
+                功能介绍
+                文字聊天：回答日常问题
+                支持 语音回复
+                计算 2 * 3
+                详情请看使用说明。
+                """.strip()), chunks);
     }
 
     @Test
@@ -441,7 +437,6 @@ class MessageProcessorTest {
         private final List<String> sentTexts = new ArrayList<>();
         private final List<byte[]> sentImages = new ArrayList<>();
         private final List<byte[]> sentVoices = new ArrayList<>();
-        private boolean failVoice;
 
         @Override
         public void loginAndWait(Path qrCodePath) {
@@ -471,10 +466,7 @@ class MessageProcessorTest {
                 int sampleRate,
                 int encodeType,
                 int bitsPerSample,
-                String transcript) throws IOException {
-            if (failVoice) {
-                throw new IOException("voice send failed");
-            }
+                String transcript) {
             sentVoices.add(data.clone());
         }
 

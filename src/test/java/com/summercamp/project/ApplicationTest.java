@@ -73,6 +73,7 @@ class ApplicationTest {
                         "calculate",
                         "clear_memory",
                         "complete_todo",
+                        "create_result_page",
                         "generate_image",
                         "generate_qr_code",
                         "get_current_datetime",

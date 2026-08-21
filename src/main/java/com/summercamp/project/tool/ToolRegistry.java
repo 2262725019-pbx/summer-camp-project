@@ -42,6 +42,12 @@ public class ToolRegistry {
         return tools.values().stream().map(BotTool::definition).toList();
     }
 
+    /** 未知工具和未显式声明的工具一律不允许并行。 */
+    public boolean isParallelSafe(String name) {
+        BotTool tool = tools.get(name);
+        return tool != null && tool.parallelSafe();
+    }
+
     /** 执行工具并保留图片、直接完成等富结果，供多步 Function Calling 使用。 */
     public Invocation invoke(String name, String argumentJson, ToolContext context) {
         long startedAt = System.nanoTime();

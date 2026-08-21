@@ -341,7 +341,7 @@ public class MessageProcessor {
 
     List<String> splitForSpeech(String text) {
         List<String> chunks = new ArrayList<>();
-        String remaining = text.strip();
+        String remaining = prepareTextForSpeech(text);
         while (remaining.length() > TTS_CHUNK_MAX_CHARS) {
             int split = findSpeechSplit(remaining, TTS_CHUNK_MAX_CHARS);
             chunks.add(remaining.substring(0, split).strip());
@@ -351,6 +351,25 @@ public class MessageProcessor {
             chunks.add(remaining);
         }
         return chunks;
+    }
+
+    String prepareTextForSpeech(String text) {
+        String spoken = text.replace("\r\n", "\n").replace('\r', '\n');
+        spoken = spoken.replaceAll("(?s)```(?:[^\\n]*)\\n?(.*?)```", "$1");
+        spoken = spoken.replaceAll("!\\[([^\\]]*)]\\([^\\r\\n)]*\\)", "$1");
+        spoken = spoken.replaceAll("\\[([^\\]]+)]\\([^\\r\\n)]*\\)", "$1");
+        spoken = spoken.replaceAll("(?m)^\\s{0,3}#{1,6}\\s*", "");
+        spoken = spoken.replaceAll("(?m)^\\s*>+\\s?", "");
+        spoken = spoken.replaceAll("(?m)^\\s*[-+*]\\s+", "");
+        spoken = spoken.replaceAll("\\*\\*(\\S(?:[^\\r\\n]*?\\S)?)\\*\\*", "$1");
+        spoken = spoken.replaceAll("__(\\S(?:[^\\r\\n]*?\\S)?)__", "$1");
+        spoken = spoken.replaceAll("(?<!\\*)\\*(\\S(?:[^*\\r\\n]*?\\S)?)\\*(?!\\*)", "$1");
+        spoken = spoken.replaceAll("(?<!_)_(\\S(?:[^_\\r\\n]*?\\S)?)_(?!_)", "$1");
+        spoken = spoken.replaceAll("~~(\\S(?:[^\\r\\n]*?\\S)?)~~", "$1");
+        spoken = spoken.replace("`", "");
+        spoken = spoken.replaceAll("[\\t ]+", " ");
+        spoken = spoken.replaceAll(" *\\n *", "\n");
+        return spoken.replaceAll("\\n{3,}", "\n\n").strip();
     }
 
     private int findSpeechSplit(String text, int maximum) {

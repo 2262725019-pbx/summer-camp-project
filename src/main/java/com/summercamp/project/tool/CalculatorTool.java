@@ -33,6 +33,11 @@ public class CalculatorTool implements BotTool {
     }
 
     @Override
+    public boolean parallelSafe() {
+        return true;
+    }
+
+    @Override
     public ToolResult execute(JsonNode arguments, ToolContext context) {
         String expression = arguments.path("expression").asText("").strip();
         if (!expression.isBlank()) {

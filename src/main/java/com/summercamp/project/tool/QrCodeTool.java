@@ -4,14 +4,11 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.google.zxing.BarcodeFormat;
-import com.google.zxing.EncodeHintType;
 import com.google.zxing.WriterException;
 import com.google.zxing.client.j2se.MatrixToImageWriter;
 import com.google.zxing.qrcode.QRCodeWriter;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
-import java.util.EnumMap;
 import org.springframework.stereotype.Component;
 
 @Component
@@ -49,13 +46,16 @@ public class QrCodeTool implements BotTool {
     }
 
     @Override
+    public boolean parallelSafe() {
+        return true;
+    }
+
+    @Override
     public ToolResult execute(JsonNode arguments, ToolContext context) {
         String text = arguments.path("text").asText().strip();
         int size = arguments.path("size").asInt(DEFAULT_SIZE);
         try (ByteArrayOutputStream output = new ByteArrayOutputStream()) {
-            EnumMap<EncodeHintType, Object> hints = new EnumMap<>(EncodeHintType.class);
-            hints.put(EncodeHintType.CHARACTER_SET, StandardCharsets.UTF_8.name());
-            var matrix = new QRCodeWriter().encode(text, BarcodeFormat.QR_CODE, size, size, hints);
+            var matrix = new QRCodeWriter().encode(text, BarcodeFormat.QR_CODE, size, size);
             MatrixToImageWriter.writeToStream(matrix, "PNG", output);
             return ToolResult.image(output.toByteArray(), "qrcode.png", "二维码已生成。");
         } catch (WriterException | IOException exception) {

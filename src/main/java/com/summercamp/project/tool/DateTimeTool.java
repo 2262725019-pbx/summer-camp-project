@@ -52,6 +52,11 @@ public class DateTimeTool implements BotTool {
     }
 
     @Override
+    public boolean parallelSafe() {
+        return true;
+    }
+
+    @Override
     public ToolResult execute(JsonNode arguments, ToolContext context) {
         String requestedZone = arguments.path("timezone").asText("").strip();
         ZoneId zone;

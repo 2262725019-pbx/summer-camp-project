@@ -10,6 +10,12 @@ bot.voice-max-duration=30s
 bot.voice-reply-mode=file
 bot.poll-retry-delay=5s
 
+# 计算结果展示页。手机与电脑在同一局域网时，留空即可自动识别电脑 IP。
+# 如果自动识别的地址不正确，可填写例如：http://192.168.1.100:8080
+result-page.public-base-url=
+result-page.port=8080
+result-page.ttl=30m
+
 ai.zhipu.base-url=https://open.bigmodel.cn/api/paas/v4
 ai.zhipu.chat-api-path=/chat/completions
 ai.zhipu.image-api-path=/images/generations

@@ -21,6 +21,7 @@ import com.summercamp.project.tool.CalculatorTool;
 import com.summercamp.project.tool.AddTodoTool;
 import com.summercamp.project.tool.BotTool;
 import com.summercamp.project.tool.ListTodosTool;
+import com.summercamp.project.tool.QrCodeTool;
 import com.summercamp.project.tool.TodoService;
 import com.summercamp.project.tool.ToolContext;
 import com.summercamp.project.tool.ToolDefinition;
@@ -35,6 +36,9 @@ import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.mockito.ArgumentCaptor;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -169,6 +173,126 @@ class ZhipuAiClientTest {
         assertEquals("已添加，并确认待办列表中存在该任务。", outcome.text());
         assertEquals(List.of("写项目日报"), todoService.list("user-a"));
         verify(httpClient, times(3)).send(
+                any(HttpRequest.class), any(HttpResponse.BodyHandler.class));
+    }
+
+    @Test
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    void shouldRunIndependentToolsInTheSameRoundConcurrently() throws Exception {
+        HttpClient httpClient = mock(HttpClient.class);
+        HttpResponse<String> toolRequest = mock(HttpResponse.class);
+        HttpResponse<String> finalAnswer = mock(HttpResponse.class);
+        when(toolRequest.statusCode()).thenReturn(200);
+        when(toolRequest.body()).thenReturn("""
+                {"choices":[{"message":{"tool_calls":[
+                  {"id":"call-first","type":"function","function":{"name":"parallel_first","arguments":"{}"}},
+                  {"id":"call-second","type":"function","function":{"name":"parallel_second","arguments":"{}"}}
+                ]}}]}
+                """);
+        when(finalAnswer.statusCode()).thenReturn(200);
+        when(finalAnswer.body()).thenReturn(
+                "{\"choices\":[{\"message\":{\"content\":\"两个独立工具均已完成。\"}}]}");
+        doReturn(toolRequest, finalAnswer).when(httpClient).send(
+                any(HttpRequest.class), any(HttpResponse.BodyHandler.class));
+
+        CountDownLatch bothStarted = new CountDownLatch(2);
+        AtomicInteger running = new AtomicInteger();
+        AtomicInteger maximumConcurrency = new AtomicInteger();
+        ToolRegistry registry = new ToolRegistry(
+                List.of(
+                        parallelTestTool("parallel_first", bothStarted, running, maximumConcurrency),
+                        parallelTestTool("parallel_second", bothStarted, running, maximumConcurrency)),
+                objectMapper);
+
+        ChatOutcome outcome = newClient(httpClient, registry).chat(
+                new ChatRequest(List.of(), "同时执行两个独立任务", List.of()),
+                new ToolContext("user-a", "同时执行两个独立任务"));
+
+        assertEquals("两个独立工具均已完成。", outcome.text());
+        assertEquals(2, maximumConcurrency.get());
+        verify(httpClient, times(2)).send(
+                any(HttpRequest.class), any(HttpResponse.BodyHandler.class));
+    }
+
+    @Test
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    void shouldKeepOtherParallelToolsRunningWhenOneToolFails() throws Exception {
+        HttpClient httpClient = mock(HttpClient.class);
+        HttpResponse<String> toolRequest = mock(HttpResponse.class);
+        HttpResponse<String> finalAnswer = mock(HttpResponse.class);
+        when(toolRequest.statusCode()).thenReturn(200);
+        when(toolRequest.body()).thenReturn("""
+                {"choices":[{"message":{"tool_calls":[
+                  {"id":"call-failed","type":"function","function":{"name":"failed_tool","arguments":"{}"}},
+                  {"id":"call-success","type":"function","function":{"name":"successful_tool","arguments":"{}"}}
+                ]}}]}
+                """);
+        when(finalAnswer.statusCode()).thenReturn(200);
+        when(finalAnswer.body()).thenReturn(
+                "{\"choices\":[{\"message\":{\"content\":\"成功工具的结果仍然可用。\"}}]}");
+        doReturn(toolRequest, finalAnswer).when(httpClient).send(
+                any(HttpRequest.class), any(HttpResponse.BodyHandler.class));
+        AtomicInteger executionCount = new AtomicInteger();
+        ToolRegistry registry = new ToolRegistry(
+                List.of(
+                        parallelResultTool("failed_tool", executionCount, true),
+                        parallelResultTool("successful_tool", executionCount, false)),
+                objectMapper);
+
+        ChatOutcome outcome = newClient(httpClient, registry).chat(
+                new ChatRequest(List.of(), "同时执行两个任务，其中一个失败", List.of()),
+                new ToolContext("user-a", "同时执行两个任务，其中一个失败"));
+
+        assertEquals("成功工具的结果仍然可用。", outcome.text());
+        assertEquals(2, executionCount.get());
+        verify(httpClient, times(2)).send(
+                any(HttpRequest.class), any(HttpResponse.BodyHandler.class));
+    }
+
+    @Test
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    void shouldPassFirstToolResultIntoANextRoundDependentToolCall() throws Exception {
+        HttpClient httpClient = mock(HttpClient.class);
+        HttpResponse<String> calculate = mock(HttpResponse.class);
+        HttpResponse<String> resultPage = mock(HttpResponse.class);
+        HttpResponse<String> qrCode = mock(HttpResponse.class);
+        HttpResponse<String> finalAnswer = mock(HttpResponse.class);
+        when(calculate.statusCode()).thenReturn(200);
+        when(calculate.body()).thenReturn("""
+                {"choices":[{"message":{"tool_calls":[{"id":"call-calculate","type":"function",
+                  "function":{"name":"calculate","arguments":"{\\"expression\\":\\"125 * 36\\"}"}}]}}]}
+                """);
+        when(resultPage.statusCode()).thenReturn(200);
+        when(resultPage.body()).thenReturn("""
+                {"choices":[{"message":{"tool_calls":[{"id":"call-result-page","type":"function",
+                  "function":{"name":"create_result_page","arguments":"{\\"expression\\":\\"125 * 36\\",\\"result\\":\\"4500\\"}"}}]}}]}
+                """);
+        when(qrCode.statusCode()).thenReturn(200);
+        when(qrCode.body()).thenReturn("""
+                {"choices":[{"message":{"tool_calls":[{"id":"call-qr","type":"function",
+                  "function":{"name":"generate_qr_code","arguments":"{\\"text\\":\\"http://192.168.1.20:8080/results/test-result\\"}"}}]}}]}
+                """);
+        when(finalAnswer.statusCode()).thenReturn(200);
+        when(finalAnswer.body()).thenReturn(
+                "{\"choices\":[{\"message\":{\"content\":\"计算结果4500的二维码已生成。\"}}]}");
+        doReturn(calculate, resultPage, qrCode, finalAnswer).when(httpClient).send(
+                any(HttpRequest.class), any(HttpResponse.BodyHandler.class));
+        ToolRegistry registry = new ToolRegistry(
+                List.of(
+                        new CalculatorTool(objectMapper),
+                        resultPageTestTool(),
+                        new QrCodeTool(objectMapper)),
+                objectMapper);
+
+        ChatOutcome outcome = newClient(httpClient, registry).chat(
+                new ChatRequest(List.of(), "计算125乘36，然后把结果生成二维码", List.of()),
+                new ToolContext("user-a", "计算125乘36，然后把结果生成二维码"));
+
+        assertEquals("计算结果4500的二维码已生成。", outcome.text());
+        assertEquals(1, outcome.media().size());
+        assertEquals("qrcode.png", outcome.media().getFirst().fileName());
+        assertTrue(outcome.media().getFirst().data().length > 0);
+        verify(httpClient, times(4)).send(
                 any(HttpRequest.class), any(HttpResponse.BodyHandler.class));
     }
 
@@ -399,6 +523,97 @@ class ZhipuAiClientTest {
         assertTrue(request.uri().getPath().endsWith("/audio/transcriptions"));
         assertTrue(request.headers().firstValue("Content-Type").orElseThrow()
                 .startsWith("multipart/form-data; boundary="));
+    }
+
+    private BotTool parallelTestTool(
+            String name,
+            CountDownLatch bothStarted,
+            AtomicInteger running,
+            AtomicInteger maximumConcurrency) {
+        var schema = objectMapper.createObjectNode()
+                .put("type", "object")
+                .put("additionalProperties", false);
+        ToolDefinition definition = new ToolDefinition(name, "并行测试工具", schema);
+        return new BotTool() {
+            @Override
+            public ToolDefinition definition() {
+                return definition;
+            }
+
+            @Override
+            public ToolResult execute(JsonNode arguments, ToolContext context) {
+                int current = running.incrementAndGet();
+                maximumConcurrency.accumulateAndGet(current, Math::max);
+                bothStarted.countDown();
+                try {
+                    if (!bothStarted.await(1, TimeUnit.SECONDS)) {
+                        throw new IllegalStateException("两个工具没有并行启动");
+                    }
+                    return ToolResult.text(name + "完成");
+                } catch (InterruptedException exception) {
+                    Thread.currentThread().interrupt();
+                    throw new IllegalStateException("并行测试被中断", exception);
+                } finally {
+                    running.decrementAndGet();
+                }
+            }
+
+            @Override
+            public boolean parallelSafe() {
+                return true;
+            }
+        };
+    }
+
+    private BotTool parallelResultTool(String name, AtomicInteger executionCount, boolean shouldFail) {
+        var schema = objectMapper.createObjectNode()
+                .put("type", "object")
+                .put("additionalProperties", false);
+        ToolDefinition definition = new ToolDefinition(name, "并行失败隔离测试工具", schema);
+        return new BotTool() {
+            @Override
+            public ToolDefinition definition() {
+                return definition;
+            }
+
+            @Override
+            public ToolResult execute(JsonNode arguments, ToolContext context) {
+                executionCount.incrementAndGet();
+                if (shouldFail) {
+                    throw new IllegalStateException("测试工具故意失败");
+                }
+                return ToolResult.text(name + "完成");
+            }
+
+            @Override
+            public boolean parallelSafe() {
+                return true;
+            }
+        };
+    }
+
+    private BotTool resultPageTestTool() {
+        var schema = objectMapper.createObjectNode().put("type", "object");
+        var properties = schema.putObject("properties");
+        properties.putObject("expression").put("type", "string");
+        properties.putObject("result").put("type", "string");
+        schema.putArray("required").add("expression").add("result");
+        schema.put("additionalProperties", false);
+        ToolDefinition definition = new ToolDefinition(
+                "create_result_page", "创建测试结果页", schema);
+        return new BotTool() {
+            @Override
+            public ToolDefinition definition() {
+                return definition;
+            }
+
+            @Override
+            public ToolResult execute(JsonNode arguments, ToolContext context) {
+                var result = objectMapper.createObjectNode();
+                result.put("url", "http://192.168.1.20:8080/results/test-result");
+                return ToolResult.data(result);
+            }
+        };
     }
 
 }
