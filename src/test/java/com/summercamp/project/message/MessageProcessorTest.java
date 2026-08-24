@@ -4,6 +4,8 @@ import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.summercamp.project.config.RagProperties;
 import com.summercamp.project.conversation.InMemoryConversationMemoryStore;
 import com.summercamp.project.intent.IntentClassificationClient;
 import com.summercamp.project.intent.IntentRecognizer;
@@ -17,6 +19,11 @@ import com.summercamp.project.llm.GeneratedImage;
 import com.summercamp.project.llm.ImageGenerationClient;
 import com.summercamp.project.llm.ImageInput;
 import com.summercamp.project.llm.LlmException;
+import com.summercamp.project.rag.KeywordRagRetriever;
+import com.summercamp.project.skill.PendingSkillStore;
+import com.summercamp.project.skill.SkillRegistry;
+import com.summercamp.project.skill.nutrition.FoodCatalog;
+import com.summercamp.project.skill.nutrition.MuscleGainMealPlanSkill;
 import com.summercamp.project.speech.SpeechToTextClient;
 import com.summercamp.project.speech.SynthesizedSpeech;
 import com.summercamp.project.speech.TextToSpeechClient;
@@ -48,6 +55,9 @@ class MessageProcessorTest {
         gateway = new FakeGateway();
         model = new FakeModel();
         memory = new InMemoryConversationMemoryStore();
+        ObjectMapper objectMapper = new ObjectMapper();
+        SkillRegistry skillRegistry = new SkillRegistry(List.of(
+                new MuscleGainMealPlanSkill(new FoodCatalog(objectMapper))));
         processor = new MessageProcessor(
                 gateway,
                 model,
@@ -57,6 +67,9 @@ class MessageProcessorTest {
                 new IntentRecognizer(model),
                 new FakeWeather(),
                 new PendingWeatherRequestStore(),
+                skillRegistry,
+                new PendingSkillStore(),
+                new KeywordRagRetriever(new RagProperties(true, 3, 2, 2_500), objectMapper),
                 memory,
                 new MessageDeduplicator());
     }
@@ -124,6 +137,39 @@ class MessageProcessorTest {
 
         assertEquals(1, model.chatRequests.size());
         assertTrue(model.imagePrompts.isEmpty());
+        assertTrue(model.chatRequests.getFirst().groundingContext().isBlank());
+    }
+
+    @Test
+    void shouldCompleteMealPlanSkillAcrossTwoMessagesWithoutCallingLlm() {
+        processor.process(textMessage("meal-1", "user-a", "帮我制定一个增肌饮食计划"));
+        processor.process(textMessage("meal-2", "user-a", """
+                性别：男
+                年龄：22
+                身高：175cm
+                体重：70kg
+                日常活动：重度
+                每周训练：4次
+                每次训练：60分钟
+                每日餐数：4餐
+                健康确认：健康成人、无食物过敏
+                """));
+
+        assertTrue(model.chatRequests.isEmpty());
+        assertTrue(gateway.sentTexts.getFirst().contains("请按下面格式补充完整资料"));
+        assertTrue(gateway.sentTexts.getLast().contains("训练日目标"));
+        assertTrue(gateway.sentTexts.getLast().contains("休息日目标"));
+        assertEquals(4, memory.history("user-a").size());
+    }
+
+    @Test
+    void shouldAugmentProjectFaqQuestionWithRagContext() {
+        processor.process(textMessage("rag-1", "user-a", "智谱 API Key 应该配置在哪里？"));
+
+        assertEquals(1, model.chatRequests.size());
+        ChatRequest request = model.chatRequests.getFirst();
+        assertEquals("智谱 API Key 应该配置在哪里？", request.text());
+        assertTrue(request.groundingContext().contains("config/application-local.properties"));
     }
 
     @Test

@@ -16,6 +16,12 @@ result-page.public-base-url=
 result-page.port=8080
 result-page.ttl=30m
 
+# 项目 FAQ 关键词 RAG。改为 false 可进行关闭 RAG 的对比测试。
+rag.enabled=true
+rag.top-k=3
+rag.min-score=2
+rag.max-context-chars=2500
+
 ai.zhipu.base-url=https://open.bigmodel.cn/api/paas/v4
 ai.zhipu.chat-api-path=/chat/completions
 ai.zhipu.image-api-path=/images/generations

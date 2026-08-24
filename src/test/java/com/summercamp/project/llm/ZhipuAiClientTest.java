@@ -106,6 +106,22 @@ class ZhipuAiClientTest {
     }
 
     @Test
+    void shouldAddRagGroundingAsSeparateSystemMessage() {
+        JsonNode payload = client.buildChatPayload(new ChatRequest(
+                List.of(),
+                "API Key 在哪里配置？",
+                List.of(),
+                "项目资料：配置在 config/application-local.properties"));
+
+        assertEquals(3, payload.path("messages").size());
+        assertEquals("system", payload.path("messages").get(1).path("role").asText());
+        assertTrue(payload.path("messages").get(1).path("content").asText()
+                .contains("config/application-local.properties"));
+        assertEquals("API Key 在哪里配置？", payload.path("messages").get(2)
+                .path("content").asText());
+    }
+
+    @Test
     @SuppressWarnings({"rawtypes", "unchecked"})
     void shouldExecuteRequestedToolAndSendResultBackToModel() throws Exception {
         HttpClient httpClient = mock(HttpClient.class);

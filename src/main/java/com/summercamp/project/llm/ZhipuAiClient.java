@@ -314,6 +314,11 @@ public class ZhipuAiClient implements
         messages.addObject()
                 .put("role", "system")
                 .put("content", SYSTEM_INSTRUCTIONS);
+        if (!request.groundingContext().isBlank()) {
+            messages.addObject()
+                    .put("role", "system")
+                    .put("content", request.groundingContext());
+        }
         appendHistory(messages, request.history());
 
         ObjectNode current = messages.addObject();

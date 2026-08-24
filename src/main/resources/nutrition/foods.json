@@ -1,0 +1,22 @@
+[
+  {"id":"rice","name":"熟米饭","category":"carbohydrate","calories":130,"protein":2.7,"carbohydrates":28.2,"fat":0.3,"source":"USDA FoodData Central generic food"},
+  {"id":"oats","name":"燕麦片","category":"carbohydrate","calories":389,"protein":16.9,"carbohydrates":66.3,"fat":6.9,"source":"USDA FoodData Central generic food"},
+  {"id":"whole-wheat-bread","name":"全麦面包","category":"carbohydrate","calories":247,"protein":13.0,"carbohydrates":41.0,"fat":4.2,"source":"USDA FoodData Central generic food"},
+  {"id":"sweet-potato","name":"烤红薯","category":"carbohydrate","calories":90,"protein":2.0,"carbohydrates":20.7,"fat":0.2,"source":"USDA FoodData Central generic food"},
+  {"id":"banana","name":"香蕉","category":"fruit","calories":89,"protein":1.1,"carbohydrates":22.8,"fat":0.3,"source":"USDA FoodData Central generic food"},
+  {"id":"chicken","name":"熟鸡胸肉","category":"protein","calories":165,"protein":31.0,"carbohydrates":0.0,"fat":3.6,"source":"USDA FoodData Central generic food"},
+  {"id":"lean-beef","name":"熟瘦牛肉","category":"protein","calories":217,"protein":26.1,"carbohydrates":0.0,"fat":11.8,"source":"USDA FoodData Central generic food"},
+  {"id":"egg","name":"鸡蛋","category":"protein","calories":143,"protein":12.6,"carbohydrates":0.7,"fat":9.5,"source":"USDA FoodData Central generic food"},
+  {"id":"milk","name":"全脂牛奶","category":"protein","calories":61,"protein":3.2,"carbohydrates":4.8,"fat":3.3,"source":"USDA FoodData Central generic food"},
+  {"id":"yogurt","name":"原味酸奶","category":"protein","calories":61,"protein":3.5,"carbohydrates":4.7,"fat":3.3,"source":"USDA FoodData Central generic food"},
+  {"id":"salmon","name":"熟三文鱼","category":"protein","calories":208,"protein":20.4,"carbohydrates":0.0,"fat":13.4,"source":"USDA FoodData Central generic food"},
+  {"id":"tofu","name":"老豆腐","category":"protein","calories":144,"protein":17.3,"carbohydrates":2.8,"fat":8.7,"source":"USDA FoodData Central generic food"},
+  {"id":"broccoli","name":"西兰花","category":"vegetable","calories":35,"protein":2.4,"carbohydrates":7.2,"fat":0.4,"source":"USDA FoodData Central generic food"},
+  {"id":"spinach","name":"菠菜","category":"vegetable","calories":23,"protein":2.9,"carbohydrates":3.6,"fat":0.4,"source":"USDA FoodData Central generic food"},
+  {"id":"carrot","name":"胡萝卜","category":"vegetable","calories":41,"protein":0.9,"carbohydrates":9.6,"fat":0.2,"source":"USDA FoodData Central generic food"},
+  {"id":"apple","name":"苹果","category":"fruit","calories":52,"protein":0.3,"carbohydrates":13.8,"fat":0.2,"source":"USDA FoodData Central generic food"},
+  {"id":"orange","name":"橙子","category":"fruit","calories":47,"protein":0.9,"carbohydrates":11.8,"fat":0.1,"source":"USDA FoodData Central generic food"},
+  {"id":"almond","name":"杏仁","category":"fat","calories":579,"protein":21.2,"carbohydrates":21.6,"fat":49.9,"source":"USDA FoodData Central generic food"},
+  {"id":"peanut-butter","name":"花生酱","category":"fat","calories":588,"protein":25.0,"carbohydrates":20.0,"fat":50.0,"source":"USDA FoodData Central generic food"},
+  {"id":"olive-oil","name":"橄榄油","category":"fat","calories":884,"protein":0.0,"carbohydrates":0.0,"fat":100.0,"source":"USDA FoodData Central generic food"}
+]

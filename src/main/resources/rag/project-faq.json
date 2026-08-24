@@ -1,0 +1,44 @@
+[
+  {
+    "id": "startup-login",
+    "title": "IDEA 启动与微信二维码登录",
+    "keywords": ["IDEA启动", "运行项目", "登录二维码", "微信二维码", "二维码没有生成", "wechat-login-qr"],
+    "content": "在 IDEA 中运行 com.summercamp.project.Application。bot.enabled=true 时机器人会尝试登录；未登录状态会在 runtime/wechat-login-qr.png 生成二维码。扫码成功后 SDK 可能删除临时二维码文件，因此文件不存在不一定表示登录失败。"
+  },
+  {
+    "id": "local-api-keys",
+    "title": "智谱与高德 API Key 本地配置",
+    "keywords": ["APIKey配置", "API Key配置", "智谱Key", "智谱API", "高德Key", "application-local", "密钥配置"],
+    "content": "智谱和高德 Key 填写在 config/application-local.properties。可以复制 config/application-local.properties.example 后填写 ai.zhipu.api-key 和 weather.amap.api-key。真实配置文件已经被 Git 忽略，不要把密钥写进 application.properties 或示例文件。"
+  },
+  {
+    "id": "bot-capabilities",
+    "title": "机器人支持的主要功能",
+    "keywords": ["机器人功能", "有什么功能", "支持什么", "功能介绍", "使用帮助", "clear命令", "help命令"],
+    "content": "机器人支持上下文文字聊天、语音识别与回复、图片识别和生成、高德天气、计算、时间、待办、二维码、多步工具调用、Skill 与 RAG。/help 查看帮助，/clear 清除当前用户的对话和待处理请求。"
+  },
+  {
+    "id": "weather-voice-image",
+    "title": "天气、语音与图片使用方法",
+    "keywords": ["天气功能配置", "语音回复", "语音识别", "图片识别", "图片生成", "高德天气"],
+    "content": "天气功能使用高德 Web 服务 Key，支持实时天气和三日预报。发送普通微信语音后会先转写文字，语音输入默认获得语音回复，失败时回退文字。直接发送图片可识别内容；发送“帮我生成一张图片：描述”可生成图片。"
+  },
+  {
+    "id": "tool-skill-rag",
+    "title": "Tool、Skill 与 RAG 的区别",
+    "keywords": ["Tool和Skill", "Skill是什么", "RAG是什么", "工具类区别", "检索增强"],
+    "content": "Tool 执行计算、天气、二维码等原子动作；Skill 在调用普通聊天前执行完整、确定的业务流程；RAG 从项目知识库检索资料并增强大模型上下文。三者可以组合，并不会互相替代。"
+  },
+  {
+    "id": "result-page-network",
+    "title": "二维码结果页面与局域网访问",
+    "keywords": ["二维码打不开", "结果页面", "局域网访问", "手机无法访问", "防火墙", "public-base-url"],
+    "content": "计算结果二维码指向电脑上临时启动的结果页面。手机和电脑需要位于同一局域网，Windows 防火墙需要允许项目端口。自动识别地址错误时，在 config/application-local.properties 设置 result-page.public-base-url 为电脑局域网地址。"
+  },
+  {
+    "id": "git-secret-safety",
+    "title": "Git 提交与密钥安全",
+    "keywords": ["配置文件忽略", "Git忽略", "密钥泄露", "APIKey推送", "application-local提交"],
+    "content": "config/application-local.properties 已在 .gitignore 中，但如果该文件曾经被 Git 跟踪，仍需使用 git rm --cached config/application-local.properties 停止跟踪。密钥一旦推送到远程仓库，应立即在对应平台撤销并重新生成。示例文件只能保留占位符。"
+  }
+]

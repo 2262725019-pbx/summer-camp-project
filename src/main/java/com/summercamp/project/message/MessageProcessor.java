@@ -11,6 +11,13 @@ import com.summercamp.project.llm.ChatRequest;
 import com.summercamp.project.llm.GeneratedImage;
 import com.summercamp.project.llm.ImageGenerationClient;
 import com.summercamp.project.llm.LlmException;
+import com.summercamp.project.rag.RagContext;
+import com.summercamp.project.rag.RagRetriever;
+import com.summercamp.project.skill.BotSkill;
+import com.summercamp.project.skill.PendingSkillStore;
+import com.summercamp.project.skill.SkillContext;
+import com.summercamp.project.skill.SkillRegistry;
+import com.summercamp.project.skill.SkillResult;
 import com.summercamp.project.speech.SpeechRecognitionException;
 import com.summercamp.project.speech.SpeechToTextClient;
 import com.summercamp.project.speech.SynthesizedSpeech;
@@ -48,8 +55,10 @@ public class MessageProcessor {
             6. 询问当前时间，或添加、查看和完成个人待办
             7. 要求生成二维码，或连续执行“查天气后给建议”等多步工具任务
             8. /image 图片描述，或说“帮我生成一张图片”：根据描述生成图片
-            9. /clear：清除当前用户的对话记录和待补充意图
-            10. /help：查看本帮助
+            9. 发送“帮我制定增肌饮食计划”：进入增肌饮食 Skill
+            10. 项目配置类问题会先检索本地 FAQ，再由模型回答
+            11. /clear：清除当前用户的对话记录和待补充意图
+            12. /help：查看本帮助
             当前版本暂不处理文件和视频。
             """;
 
@@ -61,6 +70,9 @@ public class MessageProcessor {
     private final IntentRecognizer intentRecognizer;
     private final WeatherClient weatherClient;
     private final PendingWeatherRequestStore pendingWeatherStore;
+    private final SkillRegistry skillRegistry;
+    private final PendingSkillStore pendingSkillStore;
+    private final RagRetriever ragRetriever;
     private final ConversationMemoryStore memoryStore;
     private final MessageDeduplicator deduplicator;
 
@@ -73,6 +85,9 @@ public class MessageProcessor {
             IntentRecognizer intentRecognizer,
             WeatherClient weatherClient,
             PendingWeatherRequestStore pendingWeatherStore,
+            SkillRegistry skillRegistry,
+            PendingSkillStore pendingSkillStore,
+            RagRetriever ragRetriever,
             ConversationMemoryStore memoryStore,
             MessageDeduplicator deduplicator) {
         this.gateway = gateway;
@@ -83,6 +98,9 @@ public class MessageProcessor {
         this.intentRecognizer = intentRecognizer;
         this.weatherClient = weatherClient;
         this.pendingWeatherStore = pendingWeatherStore;
+        this.skillRegistry = skillRegistry;
+        this.pendingSkillStore = pendingSkillStore;
+        this.ragRetriever = ragRetriever;
         this.memoryStore = memoryStore;
         this.deduplicator = deduplicator;
     }
@@ -139,6 +157,7 @@ public class MessageProcessor {
         if (intent.type() == IntentType.CLEAR_CONTEXT) {
             memoryStore.clear(message.userId());
             pendingWeatherStore.clear(message.userId());
+            pendingSkillStore.clear(message.userId());
             sendReply(message, "已清除你的对话上下文和待处理请求。");
             return;
         }
@@ -147,7 +166,32 @@ public class MessageProcessor {
             return;
         }
 
+        Optional<SkillRegistry.Match> skillMatch = skillRegistry.match(command);
+        if (skillMatch.isPresent()) {
+            pendingWeatherStore.clear(message.userId());
+            executeSkill(message, skillMatch.get().skill());
+            return;
+        }
+
+        if (intent.type() != IntentType.CHAT) {
+            pendingSkillStore.clear(message.userId());
+        }
+
         if (intent.type() == IntentType.CHAT) {
+            Optional<String> pendingSkill = pendingSkillStore.get(message.userId());
+            if (pendingSkill.isPresent()) {
+                if (isCancellation(command)) {
+                    pendingSkillStore.clear(message.userId());
+                    sendReply(message, "已取消待补充的 Skill 请求。");
+                    return;
+                }
+                Optional<BotSkill> skill = skillRegistry.findByName(pendingSkill.get());
+                if (skill.isPresent()) {
+                    executeSkill(message, skill.get());
+                    return;
+                }
+                pendingSkillStore.clear(message.userId());
+            }
             Optional<WeatherPeriod> pending = pendingWeatherStore.consume(message.userId());
             if (pending.isPresent()) {
                 if (isCancellation(command)) {
@@ -165,7 +209,7 @@ public class MessageProcessor {
             case IMAGE_ANALYSIS_REQUEST -> sendReply(
                     message,
                     "可以，请发送需要识别的图片，也可以同时附带问题；收到后我会自动分析图片内容。");
-            case CHAT -> answer(message);
+            case CHAT -> answerWithRag(message);
             case CLEAR_CONTEXT, HELP -> throw new IllegalStateException("命令意图未被提前处理");
         }
     }
@@ -191,15 +235,21 @@ public class MessageProcessor {
     }
 
     private void answer(InboundMessage message) throws IOException {
-        answer(message, message.text());
+        answer(message, message.text(), "");
     }
 
     private void answer(InboundMessage message, String originalUserText) throws IOException {
+        answer(message, originalUserText, "");
+    }
+
+    private void answer(InboundMessage message, String originalUserText, String groundingContext)
+            throws IOException {
         List<com.summercamp.project.llm.ChatMessage> history = memoryStore.history(message.userId());
         ChatRequest request = new ChatRequest(
                 history,
                 message.text(),
-                message.images());
+                message.images(),
+                groundingContext);
         ChatOutcome outcome = chatClient.chat(
                 request,
                 new ToolContext(message.userId(), originalUserText, history));
@@ -214,6 +264,32 @@ public class MessageProcessor {
                 ? "[已发送 " + outcome.media().size() + " 张图片]"
                 : outcome.text();
         memoryStore.recordExchange(message.userId(), memoryText, memoryReply);
+    }
+
+    private void answerWithRag(InboundMessage message) throws IOException {
+        RagContext context = ragRetriever.retrieve(message.text());
+        if (context.matched()) {
+            LOGGER.info("RAG 命中资料：{}", context.documentIds());
+        } else {
+            LOGGER.debug("RAG 未命中资料");
+        }
+        answer(message, message.text(), context.promptContext());
+    }
+
+    private void executeSkill(InboundMessage message, BotSkill skill) throws IOException {
+        LOGGER.info("执行 Skill：{}", skill.name());
+        SkillResult result = skill.execute(new SkillContext(
+                message.userId(),
+                message.text(),
+                memoryStore.history(message.userId()),
+                message.isVoiceMessage()));
+        sendReply(message, result.reply());
+        memoryStore.recordExchange(message.userId(), message.text().strip(), result.reply());
+        if (result.status() == SkillResult.Status.WAITING_INPUT) {
+            pendingSkillStore.remember(message.userId(), skill.name());
+        } else {
+            pendingSkillStore.clear(message.userId());
+        }
     }
 
     private void sendOutcome(InboundMessage message, ChatOutcome outcome) throws IOException {
