@@ -75,7 +75,8 @@ class ZhipuAiClientTest {
                 "image-model",
                 "1024x1024",
                 "asr-model",
-                Duration.ofSeconds(10));
+                Duration.ofSeconds(10),
+                Duration.ofSeconds(40));
         return new ZhipuAiClient(
                 properties,
                 objectMapper,
@@ -141,7 +142,8 @@ class ZhipuAiClientTest {
         ZhipuAiClient planningClient = newClient(httpClient, toolRegistry);
 
         String result = planningClient.generatePlan("健康计划", "只返回 JSON");
-        JsonNode payload = planningClient.buildPlanningPayload("健康计划", "只返回 JSON");
+        JsonNode payload = planningClient.buildPlanningPayload(
+                "健康计划", "只返回 JSON", "text-model");
 
         assertEquals(rawPlan, result);
         assertEquals("json_object", payload.path("response_format").path("type").asText());
@@ -158,7 +160,8 @@ class ZhipuAiClientTest {
     void shouldBuildSynthesisPayloadWithoutToolsOrToolChoice() {
         JsonNode payload = client.buildSynthesisPayload(
                 "制定三日健康计划",
-                "天气：未来三日晴到多云\n运动建议：每天步行 30 分钟");
+                "天气：未来三日晴到多云\n运动建议：每天步行 30 分钟",
+                "text-model");
 
         assertEquals("text-model", payload.path("model").asText());
         assertEquals(2, payload.path("messages").size());

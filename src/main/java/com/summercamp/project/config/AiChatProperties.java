@@ -19,7 +19,8 @@ public record AiChatProperties(
         String imageModel,
         String imageSize,
         String asrModel,
-        Duration timeout) {
+        Duration timeout,
+        Duration agentTimeout) {
 
     public URI chatEndpoint() {
         return endpoint(chatApiPath);
@@ -52,6 +53,9 @@ public record AiChatProperties(
         requireText(asrModel, "ZHIPU_ASR_MODEL");
         if (timeout == null || timeout.isNegative() || timeout.isZero()) {
             throw new IllegalStateException("ZHIPU_TIMEOUT 必须大于 0");
+        }
+        if (agentTimeout == null || agentTimeout.isNegative() || agentTimeout.isZero()) {
+            throw new IllegalStateException("ZHIPU_AGENT_TIMEOUT 必须大于 0");
         }
     }
 

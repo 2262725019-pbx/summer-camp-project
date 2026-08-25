@@ -34,6 +34,8 @@ ai.zhipu.image-model=cogview-3-flash
 ai.zhipu.image-size=1024x1024
 ai.zhipu.asr-model=glm-asr-2512
 ai.zhipu.timeout=60s
+# Agent 规划与最终汇总专用超时，不影响普通聊天、视觉、语音和图片生成。
+ai.zhipu.agent-timeout=40s
 
 # 高德开放平台中申请“Web 服务”类型的 Key。
 weather.amap.api-key=PASTE_YOUR_AMAP_WEB_SERVICE_KEY_HERE

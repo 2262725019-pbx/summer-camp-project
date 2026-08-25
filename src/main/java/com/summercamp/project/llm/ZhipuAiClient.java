@@ -40,6 +40,7 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.function.Function;
 import java.util.stream.Stream;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -75,6 +76,7 @@ public class ZhipuAiClient implements
             不要声称执行了实际上没有执行的操作。
             """;
     private static final int MAX_ATTEMPTS = 2;
+    private static final int MAX_AGENT_PROVIDER_ATTEMPTS = 2;
     private static final int MAX_TOOL_ROUNDS = 5;
     private static final int MAX_TOOL_CALLS_PER_ROUND = 4;
     private static final int MAX_PROVIDER_ERROR_LENGTH = 240;
@@ -173,14 +175,9 @@ public class ZhipuAiClient implements
         if (instructions == null || instructions.isBlank()) {
             throw new IllegalArgumentException("instructions must not be blank");
         }
-        JsonNode response = executeJson(
-                properties.chatEndpoint(),
-                buildPlanningPayload(goal, instructions));
-        String output = extractOutputText(response);
-        if (output == null || output.isBlank()) {
-            throw new LlmException("智谱规划响应中没有可用 JSON 文本");
-        }
-        return output.strip();
+        return executeAgentText(
+                AgentLlmOperation.PLANNING,
+                model -> buildPlanningPayload(goal, instructions, model));
     }
 
     @Override
@@ -191,14 +188,9 @@ public class ZhipuAiClient implements
         if (observationContext == null || observationContext.isBlank()) {
             throw new IllegalArgumentException("observationContext must not be blank");
         }
-        JsonNode response = executeJson(
-                properties.chatEndpoint(),
-                buildSynthesisPayload(originalGoal, observationContext));
-        String output = extractOutputText(response);
-        if (output == null || output.isBlank()) {
-            throw new LlmException("智谱汇总响应中没有可用文本");
-        }
-        return output.strip();
+        return executeAgentText(
+                AgentLlmOperation.SYNTHESIS,
+                model -> buildSynthesisPayload(originalGoal, observationContext, model));
     }
 
     private ChatOutcome chatWithModel(ChatRequest request, String model, ToolContext context) {
@@ -369,9 +361,9 @@ public class ZhipuAiClient implements
                 : properties.visionModel());
     }
 
-    ObjectNode buildPlanningPayload(String goal, String instructions) {
+    ObjectNode buildPlanningPayload(String goal, String instructions, String model) {
         ObjectNode root = objectMapper.createObjectNode();
-        root.put("model", properties.textModel());
+        root.put("model", model);
         root.put("stream", false);
         root.put("temperature", 0.2);
         root.putObject("thinking").put("type", "disabled");
@@ -382,9 +374,12 @@ public class ZhipuAiClient implements
         return root;
     }
 
-    ObjectNode buildSynthesisPayload(String originalGoal, String observationContext) {
+    ObjectNode buildSynthesisPayload(
+            String originalGoal,
+            String observationContext,
+            String model) {
         ObjectNode root = objectMapper.createObjectNode();
-        root.put("model", properties.textModel());
+        root.put("model", model);
         root.put("stream", false);
         root.put("temperature", 0.2);
         root.putObject("thinking").put("type", "disabled");
@@ -490,6 +485,15 @@ public class ZhipuAiClient implements
                 ? List.of()
                 : properties.visionFallbackModels();
         return distinctModels(properties.visionModel(), fallbackModels);
+    }
+
+    List<String> candidateAgentModels() {
+        List<String> fallbackModels = properties.textFallbackModels() == null
+                ? List.of()
+                : properties.textFallbackModels();
+        return distinctModels(properties.textModel(), fallbackModels).stream()
+                .limit(MAX_AGENT_PROVIDER_ATTEMPTS)
+                .toList();
     }
 
     private List<String> distinctModels(String primaryModel, List<String> fallbackModels) {
@@ -616,6 +620,109 @@ public class ZhipuAiClient implements
             }
         }
         throw new LlmException("智谱接口请求失败");
+    }
+
+    private String executeAgentText(
+            AgentLlmOperation operation,
+            Function<String, ObjectNode> payloadFactory) {
+        properties.validate();
+        List<String> models = candidateAgentModels();
+        if (models.isEmpty()) {
+            throw new LlmException("Agent provider failed: "
+                    + operation.codePrefix() + "_NON_RETRYABLE");
+        }
+        RuntimeException lastFailure = null;
+        String lastCode = operation.codePrefix() + "_UNKNOWN_PROVIDER_FAILURE";
+        for (int index = 0; index < models.size(); index++) {
+            String role = index == 0 ? "PRIMARY" : "FALLBACK_1";
+            LOGGER.info("Agent {} provider attempt: role={}", operation.logName(), role);
+            try {
+                JsonNode response = executeJsonSingleAttempt(
+                        properties.chatEndpoint(),
+                        payloadFactory.apply(models.get(index)),
+                        properties.agentTimeout());
+                String output = extractOutputText(response);
+                if (output == null || output.isBlank()) {
+                    throw new InvalidProviderResponseException(
+                            "Agent provider response did not contain usable text");
+                }
+                return output.strip();
+            } catch (RuntimeException failure) {
+                lastFailure = failure;
+                AgentProviderFailureClassifier.Failure classified =
+                        AgentProviderFailureClassifier.classify(failure);
+                lastCode = classified.code(operation.codePrefix());
+                boolean fallbackAvailable = classified.fallbackEligible()
+                        && index == 0
+                        && models.size() > 1;
+                LOGGER.warn(
+                        "Agent {} provider failure: modelRole={}, code={}, fallbackAvailable={}",
+                        operation.logName(),
+                        role,
+                        lastCode,
+                        fallbackAvailable);
+                if (fallbackAvailable) {
+                    LOGGER.warn(
+                            "Agent {} fallback: from=PRIMARY, to=FALLBACK_1, reason={}",
+                            operation.logName(),
+                            lastCode);
+                    continue;
+                }
+                break;
+            }
+        }
+        throw new LlmException("Agent provider failed: " + lastCode, lastFailure);
+    }
+
+    private JsonNode executeJsonSingleAttempt(
+            URI endpoint,
+            ObjectNode payload,
+            java.time.Duration timeout) {
+        String body;
+        try {
+            body = objectMapper.writeValueAsString(payload);
+        } catch (JsonProcessingException exception) {
+            throw new AgentRequestSerializationException(
+                    "无法构造 Agent provider 请求", exception);
+        }
+
+        HttpRequest request = HttpRequest.newBuilder(endpoint)
+                .timeout(timeout)
+                .header("Authorization", "Bearer " + properties.apiKey())
+                .header("Content-Type", "application/json; charset=UTF-8")
+                .POST(HttpRequest.BodyPublishers.ofString(body, StandardCharsets.UTF_8))
+                .build();
+        try {
+            HttpResponse<String> response = httpClient.send(
+                    request,
+                    HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+            if (response.statusCode() >= 200 && response.statusCode() < 300) {
+                return parseAgentJsonResponse(response.body());
+            }
+            throw new ZhipuHttpException(
+                    response.statusCode(),
+                    "Agent provider HTTP failure: " + response.statusCode());
+        } catch (HttpTimeoutException exception) {
+            throw new LlmException("Agent provider request timed out", exception);
+        } catch (IOException exception) {
+            throw new LlmException("Agent provider connectivity failure", exception);
+        } catch (InterruptedException exception) {
+            Thread.currentThread().interrupt();
+            throw new LlmException("Agent provider request interrupted", exception);
+        }
+    }
+
+    private JsonNode parseAgentJsonResponse(String body) {
+        try {
+            JsonNode response = objectMapper.readTree(body);
+            if (response == null || response.isNull()) {
+                throw new InvalidProviderResponseException("Agent provider returned an empty response");
+            }
+            return response;
+        } catch (JsonProcessingException exception) {
+            throw new InvalidProviderResponseException(
+                    "Agent provider returned an invalid response", exception);
+        }
     }
 
     private JsonNode executeMultipartJson(URI endpoint, PreparedAudio audio) {
@@ -850,17 +957,54 @@ public class ZhipuAiClient implements
     private record ModelToolCall(String id, String name, String arguments) {
     }
 
-    private static final class ZhipuHttpException extends LlmException {
+    static final class ZhipuHttpException extends LlmException {
 
         private final int statusCode;
 
-        private ZhipuHttpException(int statusCode, String message) {
+        ZhipuHttpException(int statusCode, String message) {
             super(message);
             this.statusCode = statusCode;
         }
 
-        private int statusCode() {
+        int statusCode() {
             return statusCode;
+        }
+    }
+
+    static final class InvalidProviderResponseException extends LlmException {
+
+        InvalidProviderResponseException(String message) {
+            super(message);
+        }
+
+        InvalidProviderResponseException(String message, Throwable cause) {
+            super(message, cause);
+        }
+    }
+
+    static final class AgentRequestSerializationException extends LlmException {
+
+        AgentRequestSerializationException(String message, Throwable cause) {
+            super(message, cause);
+        }
+    }
+
+    private enum AgentLlmOperation {
+        PLANNING("planning"),
+        SYNTHESIS("synthesis");
+
+        private final String logName;
+
+        AgentLlmOperation(String logName) {
+            this.logName = logName;
+        }
+
+        private String logName() {
+            return logName;
+        }
+
+        private String codePrefix() {
+            return name();
         }
     }
 }
