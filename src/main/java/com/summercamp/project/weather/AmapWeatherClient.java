@@ -75,6 +75,20 @@ public class AmapWeatherClient implements WeatherClient {
         if (matches.size() == 1) {
             return matches.getFirst();
         }
+        if (matches.size() > 1) {
+            // 高德对直辖市名称（如“北京”）会返回多条同级记录，先看已有结果中是否有带“市”的唯一项
+            List<ResolvedLocation> municipal = matches.stream()
+                    .filter(match -> match.name().equals(normalized + "市"))
+                    .toList();
+            if (municipal.size() == 1) {
+                return municipal.getFirst();
+            }
+            // 再尝试补“市”后缀重新查询一次，例如“北京”→“北京市”
+            List<ResolvedLocation> retried = queryDistricts(normalized + "市");
+            if (retried.size() == 1) {
+                return retried.getFirst();
+            }
+        }
         throw new WeatherLocationAmbiguousException(normalized);
     }
 

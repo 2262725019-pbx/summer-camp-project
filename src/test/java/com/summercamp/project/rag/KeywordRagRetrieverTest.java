@@ -64,6 +64,21 @@ class KeywordRagRetrieverTest {
         assertTrue(memory.promptContext().contains("30分钟"));
     }
 
+    @Test
+    void shouldRetrieveHealthKnowledgeFromSecondKnowledgeBase() {
+        KeywordRagRetriever retriever = retriever(true, 2_500);
+
+        RagContext deficit = retriever.retrieve("帮我制定一个减脂计划");
+        RagContext sleep = retriever.retrieve("大学生每天应该睡几个小时？");
+
+        assertTrue(deficit.matched());
+        assertEquals("weight-loss-deficit", deficit.hits().getFirst().document().id());
+        assertTrue(deficit.promptContext().contains("热量缺口"));
+        assertTrue(sleep.matched());
+        assertEquals("sleep-habit", sleep.hits().getFirst().document().id());
+        assertTrue(sleep.promptContext().contains("7～9 小时"));
+    }
+
     private KeywordRagRetriever retriever(boolean enabled, int maxChars) {
         return new KeywordRagRetriever(
                 new RagProperties(enabled, 3, 2, maxChars),

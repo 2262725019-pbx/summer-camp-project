@@ -11,6 +11,7 @@ import com.summercamp.project.config.WeatherProperties;
 import java.net.http.HttpClient;
 import java.time.Duration;
 import java.util.function.Function;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
 
 class AmapWeatherClientTest {
@@ -81,10 +82,59 @@ class AmapWeatherClientTest {
         assertTrue(exception.getMessage().contains("INVALID_USER_KEY"));
     }
 
-    private StubClient client(Function<String, String> responseProvider) {
-        WeatherProperties properties = new WeatherProperties(
+    @Test
+    void resolvesMunicipalDistrictFromExistingCitySuffixMatch() {
+        StubClient ambiguous = client(path -> path.contains("/district")
+                ? """
+                {"status":"1","districts":[
+                  {"name":"北京市","adcode":"110000"},
+                  {"name":"北京市朝阳区","adcode":"110105"}
+                ]}
+                """
+                : CURRENT);
+
+        WeatherReport report = ambiguous.query("北京", WeatherPeriod.CURRENT);
+
+        assertTrue(ambiguous.lastPath.contains("city=110000"));
+    }
+
+    @Test
+    void retriesMunicipalDistrictWithCitySuffixWhenResultsAreAllAmbiguous() {
+        AtomicInteger districtCalls = new AtomicInteger();
+        StubClient client = new StubClient(
+                properties(),
+                new ObjectMapper(),
+                path -> {
+                    if (path.contains("/district")) {
+                        if (districtCalls.incrementAndGet() == 1) {
+                            return """
+                                    {"status":"1","districts":[
+                                      {"name":"北京市","adcode":"110000"},
+                                      {"name":"北京市","adcode":"110100"}
+                                    ]}
+                                    """;
+                        }
+                        return """
+                                {"status":"1","districts":[
+                                  {"name":"北京市","adcode":"110000"}
+                                ]}
+                                """;
+                    }
+                    return CURRENT;
+                });
+
+        WeatherReport report = client.query("北京", WeatherPeriod.CURRENT);
+
+        assertTrue(client.lastPath.contains("city=110000"));
+    }
+
+    private WeatherProperties properties() {
+        return new WeatherProperties(
                 "https://restapi.amap.com", "test-web-service-key", Duration.ofSeconds(10));
-        return new StubClient(properties, new ObjectMapper(), responseProvider);
+    }
+
+    private StubClient client(Function<String, String> responseProvider) {
+        return new StubClient(properties(), new ObjectMapper(), responseProvider);
     }
 
     private static final class StubClient extends AmapWeatherClient {
