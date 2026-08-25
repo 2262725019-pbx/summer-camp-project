@@ -20,10 +20,12 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.DisposableBean;
 import org.springframework.stereotype.Component;
 
@@ -37,12 +39,21 @@ public class ILinkWechatGateway implements WechatGateway, DisposableBean {
     private final AtomicBoolean closed = new AtomicBoolean();
     private Path activeQrCodePath;
 
+    @Autowired
     public ILinkWechatGateway(BotProperties properties) {
-        this.properties = properties;
+        this(properties, createClient());
+    }
+
+    ILinkWechatGateway(BotProperties properties, ILinkClient client) {
+        this.properties = Objects.requireNonNull(properties, "properties");
+        this.client = Objects.requireNonNull(client, "client");
+    }
+
+    private static ILinkClient createClient() {
         ILinkConfig config = ILinkConfig.builder()
                 .heartbeatEnabled(false)
                 .build();
-        this.client = ILinkClient.builder().config(config).build();
+        return ILinkClient.builder().config(config).build();
     }
 
     @Override
