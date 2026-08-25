@@ -1,16 +1,15 @@
 package com.summercamp.project.tool;
 
-import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.zxing.BinaryBitmap;
 import com.google.zxing.MultiFormatReader;
+import com.google.zxing.Result;
 import com.google.zxing.client.j2se.BufferedImageLuminanceSource;
 import com.google.zxing.common.HybridBinarizer;
 import java.io.ByteArrayInputStream;
-import java.nio.charset.StandardCharsets;
 import javax.imageio.ImageIO;
 import org.junit.jupiter.api.Test;
 
@@ -25,8 +24,8 @@ class QrCodeToolTest {
     }
 
     @Test
-    void asciiUrlStillRoundTripsThroughGeneratedQrCode() throws Exception {
-        assertRoundTrip("https://example.com");
+    void asciiUrlRoundTripsThroughGeneratedQrCode() throws Exception {
+        assertRoundTrip("https://example.com/results/4500");
     }
 
     @Test
@@ -34,21 +33,16 @@ class QrCodeToolTest {
         assertRoundTrip("夏令营测试 2026-08-20 星期四");
     }
 
-    private void assertRoundTrip(String expected) throws Exception {
+    private void assertRoundTrip(String text) throws Exception {
+        var arguments = objectMapper.createObjectNode().put("text", text);
         ToolResult.Image image = assertInstanceOf(
                 ToolResult.Image.class,
-                tool.execute(
-                        objectMapper.createObjectNode().put("text", expected),
-                        ToolContext.anonymous()));
-
+                tool.execute(arguments, ToolContext.anonymous()));
         var bufferedImage = ImageIO.read(new ByteArrayInputStream(image.data()));
         BinaryBitmap bitmap = new BinaryBitmap(
                 new HybridBinarizer(new BufferedImageLuminanceSource(bufferedImage)));
-        String decoded = new MultiFormatReader().decode(bitmap).getText();
+        Result decoded = new MultiFormatReader().decode(bitmap);
 
-        assertEquals(expected, decoded);
-        assertArrayEquals(
-                expected.getBytes(StandardCharsets.UTF_8),
-                decoded.getBytes(StandardCharsets.UTF_8));
+        assertEquals(text, decoded.getText());
     }
 }
