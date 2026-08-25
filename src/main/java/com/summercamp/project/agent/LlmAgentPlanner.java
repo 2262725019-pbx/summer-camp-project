@@ -35,6 +35,17 @@ public final class LlmAgentPlanner implements AgentPlanner {
             4. 最终必须有且只有一个 SYNTHESIZE；它必须位于业务任务之后，并依赖实际执行结果。
             5. 模型不得指定 status；应用会把每个新步骤初始化为 PENDING。
             6. 规划阶段只做规划，不得声称已经调用工具、Skill、RAG 或完成现实操作。
+            7. 每一步必须提供 inputs object；只能使用对应 action 支持的字段：
+               GET_DATETIME: timezone 可选；
+               GET_WEATHER: location、period 必填，period 只能是 CURRENT、TODAY、TOMORROW、
+               DAY_AFTER_TOMORROW、THREE_DAYS；
+               RETRIEVE_KNOWLEDGE: query 必填；
+               RUN_EXERCISE_SKILL、RUN_MEAL_SKILL: request 可选；
+               CALCULATE: expression 必填；CREATE_TODO: item 必填；
+               VALIDATE、SYNTHESIZE: inputs 必须是空 object。不得生成未列出的 input 字段。
+            8. get_weather 最多提供三日预报。对于 7 天计划，只能查询 THREE_DAYS，用真实天气调整
+               前三天；后续日期采用天气无关的一般安排，并明确实时天气只覆盖近期三天，
+               不得声称取得真实 7 日天气。
 
             本 Agent 仅适用于一般性健康生活、饮食、运动和作息规划。不得规划疾病诊断、药物建议、
             治疗方案或替代医生的行为。若 Goal 明显涉及医疗诊断或治疗，只能生成安全、有限、
@@ -49,11 +60,12 @@ public final class LlmAgentPlanner implements AgentPlanner {
                   "action": "GET_DATETIME",
                   "description": "清晰、具体的业务步骤",
                   "reason": "该步骤与 Goal 的关系",
-                  "dependsOn": []
+                  "dependsOn": [],
+                  "inputs": {"timezone": "Asia/Shanghai"}
                 }
               ]
             }
-            root 只能包含 goal、steps；step 只能包含 id、action、description、reason、dependsOn。
+            root 只能包含 goal、steps；step 只能包含 id、action、description、reason、dependsOn、inputs。
             """;
 
     private static final Logger LOGGER = LoggerFactory.getLogger(LlmAgentPlanner.class);

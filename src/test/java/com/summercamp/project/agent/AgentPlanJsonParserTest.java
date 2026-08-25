@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.util.Map;
 import org.junit.jupiter.api.Test;
 
 class AgentPlanJsonParserTest {
@@ -16,6 +17,7 @@ class AgentPlanJsonParserTest {
 
         assertEquals("安排健康生活", plan.goal());
         assertEquals(4, plan.steps().size());
+        assertEquals(Map.of("query", "大学生健康作息"), plan.steps().get(1).inputs());
         assertTrue(plan.steps().stream().allMatch(step -> step.status() == AgentStepStatus.PENDING));
     }
 
@@ -67,6 +69,23 @@ class AgentPlanJsonParserTest {
     }
 
     @Test
+    void rejectsMissingInputsObject() {
+        assertParseFailure(
+                validJson().replace(",\"inputs\":{\"timezone\":\"Asia/Shanghai\"}", ""),
+                ".inputs is required");
+    }
+
+    @Test
+    void rejectsNonObjectOrNonStringInputs() {
+        assertParseFailure(
+                validJson().replace("\"inputs\":{\"query\":\"大学生健康作息\"}", "\"inputs\":[]"),
+                "string-valued object");
+        assertParseFailure(
+                validJson().replace("\"query\":\"大学生健康作息\"", "\"query\":42"),
+                "string-valued object");
+    }
+
+    @Test
     void rejectsTrailingJsonOrExecutableText() {
         assertParseFailure(validJson() + "\n{\"run\":\"code\"}", "not valid JSON");
     }
@@ -88,10 +107,10 @@ class AgentPlanJsonParserTest {
                 {
                   "goal":"安排健康生活",
                   "steps":[
-                    {"id":"S1","action":"GET_DATETIME","description":"确认时间","reason":"建立时间基准","dependsOn":[]},
-                    {"id":"S2","action":"RETRIEVE_KNOWLEDGE","description":"获取生活知识","reason":"采用一般建议","dependsOn":[]},
-                    {"id":"S3","action":"RUN_EXERCISE_SKILL","description":"规划轻量运动","reason":"改善日常活动","dependsOn":["S1","S2"]},
-                    {"id":"S4","action":"SYNTHESIZE","description":"汇总计划","reason":"输出最终安排","dependsOn":["S3"]}
+                    {"id":"S1","action":"GET_DATETIME","description":"确认时间","reason":"建立时间基准","dependsOn":[],"inputs":{"timezone":"Asia/Shanghai"}},
+                    {"id":"S2","action":"RETRIEVE_KNOWLEDGE","description":"获取生活知识","reason":"采用一般建议","dependsOn":[],"inputs":{"query":"大学生健康作息"}},
+                    {"id":"S3","action":"RUN_EXERCISE_SKILL","description":"规划轻量运动","reason":"改善日常活动","dependsOn":["S1","S2"],"inputs":{}},
+                    {"id":"S4","action":"SYNTHESIZE","description":"汇总计划","reason":"输出最终安排","dependsOn":["S3"],"inputs":{}}
                   ]
                 }
                 """;

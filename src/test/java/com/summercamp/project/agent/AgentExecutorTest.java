@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.summercamp.project.llm.ChatMessage;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -237,11 +238,17 @@ class AgentExecutorTest {
                 }
         );
         AgentPlan plan = plan(step("S1", AgentAction.GET_DATETIME));
+        List<ChatMessage> history = new ArrayList<>(List.of(ChatMessage.user("previous")));
 
-        executor(handler).execute("original user goal", plan);
+        executor(handler).execute("user-42", "original user goal", history, true, plan);
+        history.clear();
         AgentExecutionContext context = captured.get();
 
+        assertEquals("user-42", context.userId());
         assertEquals("original user goal", context.originalGoal());
+        assertEquals(List.of(ChatMessage.user("previous")), context.history());
+        assertTrue(context.voiceMessage());
+        assertThrows(UnsupportedOperationException.class, () -> context.history().clear());
         assertThrows(UnsupportedOperationException.class, () -> context.plan().steps().clear());
         assertThrows(UnsupportedOperationException.class, () -> context.state().statuses().clear());
         assertThrows(UnsupportedOperationException.class, () -> context.state().observations().clear());

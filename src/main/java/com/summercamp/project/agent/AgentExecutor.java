@@ -1,5 +1,7 @@
 package com.summercamp.project.agent;
 
+import com.summercamp.project.llm.ChatMessage;
+import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import org.springframework.stereotype.Component;
@@ -20,8 +22,25 @@ public final class AgentExecutor {
     }
 
     public AgentState execute(String originalGoal, AgentPlan plan) {
+        return execute("", originalGoal, List.of(), false, plan);
+    }
+
+    public AgentState execute(
+            String userId,
+            String originalGoal,
+            List<ChatMessage> history,
+            boolean voiceMessage,
+            AgentPlan plan
+    ) {
         AgentState state = new AgentState(Objects.requireNonNull(plan, "plan must not be null"));
-        AgentExecutionContext context = new AgentExecutionContext(originalGoal, state, plan);
+        AgentExecutionContext context = new AgentExecutionContext(
+                userId,
+                originalGoal,
+                history,
+                voiceMessage,
+                state,
+                plan
+        );
         int executedSteps = 0;
 
         while (state.hasPendingSteps()) {

@@ -69,16 +69,45 @@ class AgentStateTest {
     @Test
     void collectionsCannotBeModifiedExternally() {
         List<String> dependencies = new ArrayList<>(List.of("datetime"));
+        Map<String, String> inputs = new LinkedHashMap<>(Map.of("location", "镇江"));
         AgentStep weather = new AgentStep(
                 "weather",
                 AgentAction.GET_WEATHER,
                 "读取天气",
                 "安排锻炼",
-                dependencies
+                dependencies,
+                inputs
         );
         dependencies.add("external-change");
+        inputs.put("period", "THREE_DAYS");
         assertEquals(List.of("datetime"), weather.dependsOn());
+        assertEquals(Map.of("location", "镇江"), weather.inputs());
         assertThrows(UnsupportedOperationException.class, () -> weather.dependsOn().add("change"));
+        assertThrows(UnsupportedOperationException.class, () -> weather.inputs().put("period", "TODAY"));
+        assertThrows(NullPointerException.class, () -> new AgentStep(
+                "bad",
+                AgentAction.GET_WEATHER,
+                "读取天气",
+                "测试",
+                List.of(),
+                java.util.Collections.singletonMap("location", null)
+        ));
+        assertThrows(NullPointerException.class, () -> new AgentStep(
+                "bad",
+                AgentAction.GET_WEATHER,
+                "读取天气",
+                "测试",
+                List.of(),
+                java.util.Collections.singletonMap(null, "镇江")
+        ));
+        assertThrows(NullPointerException.class, () -> new AgentStep(
+                "bad",
+                AgentAction.GET_WEATHER,
+                "读取天气",
+                "测试",
+                List.of(),
+                (Map<String, String>) null
+        ));
 
         List<AgentStep> steps = new ArrayList<>(List.of(
                 step("datetime", AgentAction.GET_DATETIME),

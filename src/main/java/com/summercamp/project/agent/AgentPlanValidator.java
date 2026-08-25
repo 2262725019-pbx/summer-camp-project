@@ -11,6 +11,7 @@ public final class AgentPlanValidator {
     public static final int MIN_STEPS = 3;
     public static final int MAX_STEPS = 12;
     public static final int MIN_DISTINCT_BUSINESS_TASKS = 3;
+    private final AgentActionInputValidator inputValidator = new AgentActionInputValidator();
 
     public AgentPlanValidationResult validate(AgentPlan plan) {
         List<String> errors = new ArrayList<>();
@@ -72,6 +73,7 @@ public final class AgentPlanValidator {
             if (step.description() == null || step.description().isBlank()) {
                 errors.add("Step " + label + " must have a non-blank description");
             }
+            errors.addAll(inputValidator.validate(step));
             for (String dependency : step.dependsOn()) {
                 if (step.id() != null && step.id().equals(dependency)) {
                     errors.add("Step " + label + " must not depend on itself");

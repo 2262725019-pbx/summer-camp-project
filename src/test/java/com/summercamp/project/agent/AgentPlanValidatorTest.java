@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.Test;
 
 class AgentPlanValidatorTest {
@@ -208,6 +209,48 @@ class AgentPlanValidatorTest {
         assertThrows(IllegalArgumentException.class, () -> new AgentPlan(" ", List.of()));
     }
 
+    @Test
+    void rejectsMissingRequiredActionInput() {
+        AgentStep invalidWeather = new AgentStep(
+                "weather",
+                AgentAction.GET_WEATHER,
+                "读取天气",
+                "安排活动",
+                List.of(),
+                Map.of("period", "THREE_DAYS")
+        );
+
+        assertInvalidWith(plan(
+                invalidWeather,
+                step("knowledge", AgentAction.RETRIEVE_KNOWLEDGE),
+                step("exercise", AgentAction.RUN_EXERCISE_SKILL, "weather", "knowledge"),
+                step("final", AgentAction.SYNTHESIZE, "exercise")
+        ), "requires non-blank input: location");
+    }
+
+    @Test
+    void rejectsUnsupportedInputAndWeatherPeriod() {
+        AgentStep invalidWeather = new AgentStep(
+                "weather",
+                AgentAction.GET_WEATHER,
+                "读取天气",
+                "安排活动",
+                List.of(),
+                Map.of("location", "镇江", "period", "SEVEN_DAYS", "apiKey", "secret")
+        );
+
+        AgentPlanValidationResult result = validator.validate(plan(
+                step("datetime", AgentAction.GET_DATETIME),
+                invalidWeather,
+                step("knowledge", AgentAction.RETRIEVE_KNOWLEDGE),
+                step("final", AgentAction.SYNTHESIZE, "weather", "knowledge")
+        ));
+
+        assertFalse(result.valid());
+        assertContains(result, "unsupported input");
+        assertContains(result, "period must be one of");
+    }
+
     private AgentPlan validHealthPlan() {
         return plan(
                 step("datetime", AgentAction.GET_DATETIME),
@@ -230,8 +273,23 @@ class AgentPlanValidatorTest {
                 action,
                 "执行 " + id,
                 "为健康生活计划提供信息",
-                List.of(dependencies)
+                List.of(dependencies),
+                defaultInputs(action)
         );
+    }
+
+    private Map<String, String> defaultInputs(AgentAction action) {
+        if (action == null) {
+            return Map.of();
+        }
+        return switch (action) {
+            case GET_DATETIME, VALIDATE, SYNTHESIZE -> Map.of();
+            case GET_WEATHER -> Map.of("location", "镇江", "period", "THREE_DAYS");
+            case RETRIEVE_KNOWLEDGE -> Map.of("query", "大学生健康生活");
+            case RUN_EXERCISE_SKILL, RUN_MEAL_SKILL -> Map.of("request", "健康生活规划");
+            case CALCULATE -> Map.of("expression", "1 + 1");
+            case CREATE_TODO -> Map.of("item", "完成健康计划");
+        };
     }
 
     private void assertInvalidWith(AgentPlan plan, String expectedErrorFragment) {

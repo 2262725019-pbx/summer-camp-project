@@ -7,14 +7,16 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.util.ArrayList;
 import java.util.Iterator;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 
 final class AgentPlanJsonParser {
     private static final Set<String> ROOT_FIELDS = Set.of("goal", "steps");
     private static final Set<String> STEP_FIELDS = Set.of(
-            "id", "action", "description", "reason", "dependsOn");
+            "id", "action", "description", "reason", "dependsOn", "inputs");
 
     private final ObjectMapper objectMapper;
 
@@ -87,12 +89,25 @@ final class AgentPlanJsonParser {
             dependencies.add(dependency.asText());
         }
 
+        JsonNode inputsNode = stepObject.get("inputs");
+        if (inputsNode == null || !inputsNode.isObject()) {
+            throw new AgentPlanParseException(path + ".inputs must be a string-valued object");
+        }
+        Map<String, String> inputs = new LinkedHashMap<>();
+        inputsNode.properties().forEach(entry -> {
+            if (!entry.getValue().isTextual()) {
+                throw new AgentPlanParseException(path + ".inputs must be a string-valued object");
+            }
+            inputs.put(entry.getKey(), entry.getValue().asText());
+        });
+
         return new AgentStep(
                 id,
                 action,
                 description,
                 reason,
                 dependencies,
+                inputs,
                 AgentStepStatus.PENDING);
     }
 
