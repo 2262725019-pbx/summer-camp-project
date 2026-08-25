@@ -3,8 +3,17 @@ package com.summercamp.project.message;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.summercamp.project.agent.AgentGoalMatcher;
+import com.summercamp.project.agent.AgentOrchestrator;
+import com.summercamp.project.agent.AgentRunRequest;
+import com.summercamp.project.agent.AgentRunResult;
 import com.summercamp.project.config.RagProperties;
 import com.summercamp.project.conversation.InMemoryConversationMemoryStore;
 import com.summercamp.project.intent.IntentClassificationClient;
@@ -43,6 +52,7 @@ import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 
 class MessageProcessorTest {
 
@@ -50,12 +60,20 @@ class MessageProcessorTest {
     private FakeModel model;
     private InMemoryConversationMemoryStore memory;
     private MessageProcessor processor;
+    private AgentOrchestrator agentOrchestrator;
 
     @BeforeEach
     void setUp() {
         gateway = new FakeGateway();
         model = new FakeModel();
         memory = new InMemoryConversationMemoryStore();
+        agentOrchestrator = mock(AgentOrchestrator.class);
+        when(agentOrchestrator.run(any(AgentRunRequest.class))).thenReturn(new AgentRunResult(
+                AgentRunResult.Status.COMPLETED,
+                "agent-final-reply",
+                null,
+                null
+        ));
         ObjectMapper objectMapper = new ObjectMapper();
         SkillRegistry skillRegistry = new SkillRegistry(List.of(
                 new MuscleGainMealPlanSkill(new FoodCatalog(objectMapper)),
@@ -73,7 +91,103 @@ class MessageProcessorTest {
                 new PendingSkillStore(),
                 new KeywordRagRetriever(new RagProperties(true, 3, 2, 2_500), objectMapper),
                 memory,
-                new MessageDeduplicator());
+                new MessageDeduplicator(),
+                new AgentGoalMatcher(),
+                agentOrchestrator);
+    }
+
+    @Test
+    void shouldRunExplicitAgentGoalAndRecordOnlyGoalAndFinalReply() {
+        processor.process(textMessage(
+                "agent-explicit",
+                "user-a",
+                "/agent   帮我制定未来7天的运动、饮食和作息综合计划"));
+
+        ArgumentCaptor<AgentRunRequest> request = ArgumentCaptor.forClass(AgentRunRequest.class);
+        verify(agentOrchestrator).run(request.capture());
+        assertEquals("user-a", request.getValue().userId());
+        assertEquals("帮我制定未来7天的运动、饮食和作息综合计划", request.getValue().goal());
+        assertTrue(request.getValue().history().isEmpty());
+        assertTrue(!request.getValue().voiceMessage());
+        assertEquals(List.of("agent-final-reply"), gateway.sentTexts);
+        assertEquals(2, memory.history("user-a").size());
+        assertEquals(request.getValue().goal(), memory.history("user-a").getFirst().content());
+        assertEquals("agent-final-reply", memory.history("user-a").getLast().content());
+        assertTrue(model.chatRequests.isEmpty());
+    }
+
+    @Test
+    void shouldShortCircuitNaturalAgentGoalBeforeSkillRagChatAndWeather() {
+        processor.process(textMessage(
+                "agent-natural",
+                "user-a",
+                "帮我制定未来七天运动、增肌饮食和睡眠的完整健康生活计划"));
+
+        verify(agentOrchestrator).run(any(AgentRunRequest.class));
+        assertEquals(List.of("agent-final-reply"), gateway.sentTexts);
+        assertTrue(model.chatRequests.isEmpty());
+        assertTrue(model.imagePrompts.isEmpty());
+    }
+
+    @Test
+    void shouldPromptForEmptyAgentGoalWithoutCallingOrchestrator() {
+        processor.process(textMessage("agent-empty", "user-a", "/agent   "));
+
+        verify(agentOrchestrator, never()).run(any(AgentRunRequest.class));
+        assertEquals(List.of(AgentGoalMatcher.EMPTY_GOAL_REPLY), gateway.sentTexts);
+        assertTrue(memory.history("user-a").isEmpty());
+    }
+
+    @Test
+    void shouldRecordRecoverableAgentReplyButNotFailedRun() {
+        when(agentOrchestrator.run(any(AgentRunRequest.class)))
+                .thenReturn(new AgentRunResult(
+                        AgentRunResult.Status.NEEDS_USER_INPUT,
+                        "请重新发送包含城市的完整最终目标。",
+                        null,
+                        null
+                ))
+                .thenReturn(new AgentRunResult(
+                        AgentRunResult.Status.FAILED,
+                        "未能完成本次健康生活规划，请稍后重试或调整目标。",
+                        null,
+                        null
+                ));
+
+        processor.process(textMessage("agent-wait", "user-a", "/agent 制定未来一周运动饮食计划"));
+        processor.process(textMessage("agent-fail", "user-b", "/agent 制定未来一周运动饮食计划"));
+
+        assertEquals(2, memory.history("user-a").size());
+        assertTrue(memory.history("user-b").isEmpty());
+        assertEquals(List.of(
+                "请重新发送包含城市的完整最终目标。",
+                "未能完成本次健康生活规划，请稍后重试或调整目标。"
+        ), gateway.sentTexts);
+    }
+
+    @Test
+    void shouldPassVoiceFlagAndReuseVoiceReplyPipelineForAgent() {
+        processor.process(new InboundMessage(
+                "agent-voice",
+                "user-a",
+                "",
+                List.of(),
+                List.of(new VoiceInput(
+                        new byte[] {1},
+                        "/agent 制定未来七天运动饮食和作息计划",
+                        6,
+                        16,
+                        24_000,
+                        1_000)),
+                false,
+                false,
+                false));
+
+        ArgumentCaptor<AgentRunRequest> request = ArgumentCaptor.forClass(AgentRunRequest.class);
+        verify(agentOrchestrator).run(request.capture());
+        assertTrue(request.getValue().voiceMessage());
+        assertEquals(1, gateway.sentVoices.size());
+        assertTrue(gateway.sentTexts.isEmpty());
     }
 
     @Test

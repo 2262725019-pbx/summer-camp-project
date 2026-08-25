@@ -1,5 +1,10 @@
 package com.summercamp.project.message;
 
+import com.summercamp.project.agent.AgentGoalMatch;
+import com.summercamp.project.agent.AgentGoalMatcher;
+import com.summercamp.project.agent.AgentOrchestrator;
+import com.summercamp.project.agent.AgentRunRequest;
+import com.summercamp.project.agent.AgentRunResult;
 import com.summercamp.project.conversation.ConversationMemoryStore;
 import com.summercamp.project.intent.IntentRecognizer;
 import com.summercamp.project.intent.IntentResult;
@@ -63,6 +68,7 @@ public class MessageProcessor {
             14. 项目配置和河南师范大学问题会先检索本地知识库，再由模型回答
             15. /clear：清除当前用户的对话记录和待补充意图
             16. /help：查看本帮助
+            17. /agent 最终目标：自主制定综合、长期的健康生活规划
             当前版本暂不处理文件和视频。
             """;
 
@@ -79,6 +85,8 @@ public class MessageProcessor {
     private final RagRetriever ragRetriever;
     private final ConversationMemoryStore memoryStore;
     private final MessageDeduplicator deduplicator;
+    private final AgentGoalMatcher agentGoalMatcher;
+    private final AgentOrchestrator agentOrchestrator;
 
     public MessageProcessor(
             WechatGateway gateway,
@@ -93,7 +101,9 @@ public class MessageProcessor {
             PendingSkillStore pendingSkillStore,
             RagRetriever ragRetriever,
             ConversationMemoryStore memoryStore,
-            MessageDeduplicator deduplicator) {
+            MessageDeduplicator deduplicator,
+            AgentGoalMatcher agentGoalMatcher,
+            AgentOrchestrator agentOrchestrator) {
         this.gateway = gateway;
         this.chatClient = chatClient;
         this.imageClient = imageClient;
@@ -107,6 +117,8 @@ public class MessageProcessor {
         this.ragRetriever = ragRetriever;
         this.memoryStore = memoryStore;
         this.deduplicator = deduplicator;
+        this.agentGoalMatcher = agentGoalMatcher;
+        this.agentOrchestrator = agentOrchestrator;
     }
 
     public void process(InboundMessage message) {
@@ -157,6 +169,16 @@ public class MessageProcessor {
         }
 
         String command = message.text().strip();
+        AgentGoalMatch agentGoal = agentGoalMatcher.parse(command);
+        if (agentGoal.status() == AgentGoalMatch.Status.EMPTY_GOAL) {
+            sendReply(message, AgentGoalMatcher.EMPTY_GOAL_REPLY);
+            return;
+        }
+        if (agentGoal.status() == AgentGoalMatch.Status.MATCHED) {
+            runAgent(message, agentGoal.goal());
+            return;
+        }
+
         IntentResult intent = intentRecognizer.recognize(command);
         if (intent.type() == IntentType.CLEAR_CONTEXT) {
             memoryStore.clear(message.userId());
@@ -215,6 +237,20 @@ public class MessageProcessor {
                     "可以，请发送需要识别的图片，也可以同时附带问题；收到后我会自动分析图片内容。");
             case CHAT -> answerWithRag(message);
             case CLEAR_CONTEXT, HELP -> throw new IllegalStateException("命令意图未被提前处理");
+        }
+    }
+
+    private void runAgent(InboundMessage message, String goal) throws IOException {
+        AgentRunResult result = agentOrchestrator.run(new AgentRunRequest(
+                message.userId(),
+                goal,
+                memoryStore.history(message.userId()),
+                message.isVoiceMessage()
+        ));
+        sendReply(message, result.reply());
+        if (result.status() == AgentRunResult.Status.COMPLETED
+                || result.status() == AgentRunResult.Status.NEEDS_USER_INPUT) {
+            memoryStore.recordExchange(message.userId(), goal, result.reply());
         }
     }
 
