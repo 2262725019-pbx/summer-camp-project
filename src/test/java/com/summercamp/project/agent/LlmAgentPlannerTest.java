@@ -46,6 +46,7 @@ class LlmAgentPlannerTest {
                 AgentAction.GET_DATETIME,
                 AgentAction.RETRIEVE_KNOWLEDGE,
                 AgentAction.RUN_EXERCISE_SKILL,
+                AgentAction.VALIDATE,
                 AgentAction.SYNTHESIZE), actions(dailyPlan));
         assertNotEquals(sevenDayPlan.steps().size(), dailyPlan.steps().size());
         assertEquals(
@@ -65,7 +66,7 @@ class LlmAgentPlannerTest {
 
         AgentPlan plan = planner(client).plan(DAILY_GOAL);
 
-        assertEquals(4, plan.steps().size());
+        assertEquals(5, plan.steps().size());
         assertEquals(2, client.requests().size());
         assertFalse(client.requests().getFirst().instructions().contains("上一次输出未通过"));
         assertTrue(client.requests().getLast().instructions().contains("上一次输出未通过"));
@@ -95,7 +96,7 @@ class LlmAgentPlannerTest {
 
         AgentPlan plan = planner(client).plan(DAILY_GOAL);
 
-        assertEquals(4, plan.steps().size());
+        assertEquals(5, plan.steps().size());
         assertEquals(2, client.requests().size());
         assertTrue(client.requests().getLast().instructions().contains("cycle"));
     }
@@ -150,7 +151,7 @@ class LlmAgentPlannerTest {
 
         AgentPlan plan = planner(client).plan(DAILY_GOAL);
 
-        assertEquals(4, plan.steps().size());
+        assertEquals(5, plan.steps().size());
         verifyNoInteractions(toolRegistry, skillRegistry, ragRetriever);
     }
 
@@ -211,7 +212,8 @@ class LlmAgentPlannerTest {
                     {"id":"S1","action":"GET_DATETIME","description":"确认今天的时间范围","reason":"安排规律作息","dependsOn":[],"inputs":{}},
                     {"id":"S2","action":"RETRIEVE_KNOWLEDGE","description":"获取轻量运动与作息知识","reason":"采用一般性健康建议","dependsOn":[],"inputs":{"query":"今日规律作息与轻量运动"}},
                     {"id":"S3","action":"RUN_EXERCISE_SKILL","description":"形成今日轻量运动安排","reason":"匹配今日作息目标","dependsOn":["S1","S2"],"inputs":{"request":"安排今天的轻量运动"}},
-                    {"id":"S4","action":"SYNTHESIZE","description":"汇总今日作息和运动计划","reason":"输出简洁的最终安排","dependsOn":["S3"],"inputs":{}}
+                    {"id":"S4","action":"VALIDATE","description":"检查今日计划信息完整性","reason":"确保真实结果完整且一致","dependsOn":["S3"],"inputs":{}},
+                    {"id":"S5","action":"SYNTHESIZE","description":"汇总今日作息和运动计划","reason":"输出简洁的最终安排","dependsOn":["S4"],"inputs":{}}
                   ]
                 }
                 """.formatted(goal);

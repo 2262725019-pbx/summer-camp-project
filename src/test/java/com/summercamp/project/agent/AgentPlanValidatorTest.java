@@ -83,7 +83,7 @@ class AgentPlanValidatorTest {
                 step("knowledge", AgentAction.RETRIEVE_KNOWLEDGE)
         );
 
-        assertInvalidWith(plan, "must contain one SYNTHESIZE");
+        assertInvalidWith(plan, "exactly one SYNTHESIZE");
     }
 
     @Test
@@ -92,10 +92,11 @@ class AgentPlanValidatorTest {
                 step("datetime", AgentAction.GET_DATETIME),
                 step("weather", AgentAction.GET_WEATHER),
                 step("knowledge", AgentAction.RETRIEVE_KNOWLEDGE),
+                step("validate", AgentAction.VALIDATE, "datetime", "weather", "knowledge"),
                 step("final", AgentAction.SYNTHESIZE)
         );
 
-        assertInvalidWith(plan, "must have at least one dependency");
+        assertInvalidWith(plan, "directly depend on VALIDATE");
     }
 
     @Test
@@ -108,7 +109,7 @@ class AgentPlanValidatorTest {
                 step("final-2", AgentAction.SYNTHESIZE, "weather")
         );
 
-        assertInvalidWith(plan, "at most one SYNTHESIZE");
+        assertInvalidWith(plan, "exactly one SYNTHESIZE");
     }
 
     @Test
@@ -161,13 +162,14 @@ class AgentPlanValidatorTest {
     @Test
     void rejectsSynthesizeAsFirstStep() {
         AgentPlan plan = plan(
-                step("final", AgentAction.SYNTHESIZE, "datetime"),
+                step("final", AgentAction.SYNTHESIZE, "validate"),
                 step("datetime", AgentAction.GET_DATETIME),
                 step("weather", AgentAction.GET_WEATHER),
-                step("knowledge", AgentAction.RETRIEVE_KNOWLEDGE)
+                step("knowledge", AgentAction.RETRIEVE_KNOWLEDGE),
+                step("validate", AgentAction.VALIDATE, "datetime", "weather", "knowledge")
         );
 
-        assertInvalidWith(plan, "first independent step");
+        assertInvalidWith(plan, "last plan step");
     }
 
     @Test
@@ -180,7 +182,7 @@ class AgentPlanValidatorTest {
                 step("final", AgentAction.SYNTHESIZE, "validate")
         );
 
-        assertInvalidWith(plan, "business execution step");
+        assertInvalidWith(plan, "close business branch");
     }
 
     @Test
@@ -189,11 +191,12 @@ class AgentPlanValidatorTest {
                 step("datetime", AgentAction.GET_DATETIME),
                 step("weather", AgentAction.GET_WEATHER),
                 step("knowledge", AgentAction.RETRIEVE_KNOWLEDGE),
-                step("final", AgentAction.SYNTHESIZE, "knowledge"),
+                step("validate", AgentAction.VALIDATE, "datetime", "weather", "knowledge"),
+                step("final", AgentAction.SYNTHESIZE, "validate"),
                 step("meal", AgentAction.RUN_MEAL_SKILL)
         );
 
-        assertInvalidWith(plan, "must not follow SYNTHESIZE");
+        assertInvalidWith(plan, "must not follow VALIDATE");
     }
 
     @Test

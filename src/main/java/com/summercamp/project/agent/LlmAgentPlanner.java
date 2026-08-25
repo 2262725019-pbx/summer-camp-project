@@ -32,7 +32,9 @@ public final class LlmAgentPlanner implements AgentPlanner {
             1. 输出 3～12 个步骤，并至少包含 3 个不同且与目标相关的业务子任务。
             2. 根据 Goal 自主选择必要能力，不要为了凑数量规划无关能力。
             3. dependsOn 中只能填写其他步骤的 step id；依赖必须存在、不得自依赖、不得形成环。
-            4. 最终必须有且只有一个 SYNTHESIZE；它必须位于业务任务之后，并依赖实际执行结果。
+            4. 必须生成完整闭环：所有业务步骤 → 一个 VALIDATE → 一个 SYNTHESIZE。
+               VALIDATE 必须直接或间接依赖全部业务分支；所有业务步骤必须位于 VALIDATE 前，
+               不得绕过 VALIDATE。SYNTHESIZE 必须是最后一步，并直接依赖 VALIDATE。
             5. 模型不得指定 status；应用会把每个新步骤初始化为 PENDING。
             6. 规划阶段只做规划，不得声称已经调用工具、Skill、RAG 或完成现实操作。
             7. 每一步必须提供 inputs object；只能使用对应 action 支持的字段：

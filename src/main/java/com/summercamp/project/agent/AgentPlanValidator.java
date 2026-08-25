@@ -33,7 +33,7 @@ public final class AgentPlanValidator {
         validateStepFieldsAndDependencies(steps, stepsById.keySet(), errors);
         validateBusinessTaskCount(steps, errors);
         validateAcyclicDependencies(stepsById, errors);
-        validateSynthesis(steps, stepsById, errors);
+        validateClosedLoop(steps, stepsById, errors);
 
         return errors.isEmpty()
                 ? new AgentPlanValidationResult(true, List.of())
@@ -135,48 +135,67 @@ public final class AgentPlanValidator {
         return false;
     }
 
-    private void validateSynthesis(
+    private void validateClosedLoop(
             List<AgentStep> steps,
             Map<String, AgentStep> stepsById,
             List<String> errors
     ) {
+        List<Integer> validationIndexes = actionIndexes(steps, AgentAction.VALIDATE);
         List<Integer> synthesisIndexes = new ArrayList<>();
-        for (int index = 0; index < steps.size(); index++) {
-            AgentStep step = steps.get(index);
-            if (step != null && step.action() == AgentAction.SYNTHESIZE) {
-                synthesisIndexes.add(index);
-            }
-        }
+        synthesisIndexes.addAll(actionIndexes(steps, AgentAction.SYNTHESIZE));
 
-        if (synthesisIndexes.isEmpty()) {
-            errors.add("Plan must contain one SYNTHESIZE step");
+        if (validationIndexes.size() != 1) {
+            errors.add("Plan must contain exactly one VALIDATE step");
+        }
+        if (synthesisIndexes.size() != 1) {
+            errors.add("Plan must contain exactly one SYNTHESIZE step");
+        }
+        if (validationIndexes.size() != 1 || synthesisIndexes.size() != 1) {
             return;
         }
-        if (synthesisIndexes.size() > 1) {
-            errors.add("Plan must contain at most one SYNTHESIZE step");
-        }
 
-        int synthesisIndex = synthesisIndexes.get(synthesisIndexes.size() - 1);
+        int validationIndex = validationIndexes.getFirst();
+        int synthesisIndex = synthesisIndexes.getFirst();
+        AgentStep validation = steps.get(validationIndex);
         AgentStep synthesis = steps.get(synthesisIndex);
-        if (synthesisIndex == 0) {
-            errors.add("SYNTHESIZE must not be the first independent step");
+        if (synthesisIndex != steps.size() - 1) {
+            errors.add("SYNTHESIZE must be the last plan step");
         }
-        if (synthesis.dependsOn().isEmpty()) {
-            errors.add("SYNTHESIZE must have at least one dependency");
-        } else if (!dependsOnBusinessExecution(synthesis, stepsById, new HashSet<>())) {
-            errors.add("SYNTHESIZE must depend on at least one business execution step");
+        if (!synthesis.dependsOn().contains(validation.id())) {
+            errors.add("SYNTHESIZE must directly depend on VALIDATE");
         }
 
-        for (int index = synthesisIndex + 1; index < steps.size(); index++) {
-            AgentStep laterStep = steps.get(index);
-            if (laterStep != null && isBusinessAction(laterStep.action())) {
-                errors.add("Business execution step " + laterStep.id() + " must not follow SYNTHESIZE");
+        List<AgentStep> businessSteps = steps.stream()
+                .filter(step -> step != null && isBusinessAction(step.action()))
+                .toList();
+        if (businessSteps.isEmpty()) {
+            errors.add("At least one business step must execute before VALIDATE");
+        }
+        for (AgentStep businessStep : businessSteps) {
+            int businessIndex = steps.indexOf(businessStep);
+            if (businessIndex > validationIndex) {
+                errors.add("Business step " + businessStep.id() + " must not follow VALIDATE");
+            }
+            if (!dependsTransitivelyOn(validation, businessStep.id(), stepsById, new HashSet<>())) {
+                errors.add("VALIDATE must close business branch ending at step " + businessStep.id());
             }
         }
     }
 
-    private boolean dependsOnBusinessExecution(
+    private List<Integer> actionIndexes(List<AgentStep> steps, AgentAction action) {
+        List<Integer> indexes = new ArrayList<>();
+        for (int index = 0; index < steps.size(); index++) {
+            AgentStep step = steps.get(index);
+            if (step != null && step.action() == action) {
+                indexes.add(index);
+            }
+        }
+        return indexes;
+    }
+
+    private boolean dependsTransitivelyOn(
             AgentStep step,
+            String expectedDependencyId,
             Map<String, AgentStep> stepsById,
             Set<String> visited
     ) {
@@ -184,12 +203,14 @@ public final class AgentPlanValidator {
             return false;
         }
         for (String dependencyId : step.dependsOn()) {
+            if (expectedDependencyId.equals(dependencyId)) {
+                return true;
+            }
             AgentStep dependency = stepsById.get(dependencyId);
             if (dependency == null) {
                 continue;
             }
-            if (isBusinessAction(dependency.action())
-                    || dependsOnBusinessExecution(dependency, stepsById, visited)) {
+            if (dependsTransitivelyOn(dependency, expectedDependencyId, stepsById, visited)) {
                 return true;
             }
         }

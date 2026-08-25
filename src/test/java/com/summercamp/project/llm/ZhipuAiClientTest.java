@@ -155,6 +155,22 @@ class ZhipuAiClientTest {
     }
 
     @Test
+    void shouldBuildSynthesisPayloadWithoutToolsOrToolChoice() {
+        JsonNode payload = client.buildSynthesisPayload(
+                "制定三日健康计划",
+                "天气：未来三日晴到多云\n运动建议：每天步行 30 分钟");
+
+        assertEquals("text-model", payload.path("model").asText());
+        assertEquals(2, payload.path("messages").size());
+        assertEquals("system", payload.path("messages").get(0).path("role").asText());
+        assertEquals("user", payload.path("messages").get(1).path("role").asText());
+        assertTrue(payload.path("messages").get(0).path("content").asText().contains("最多覆盖三日"));
+        assertTrue(payload.path("messages").get(1).path("content").asText().contains("未来三日晴到多云"));
+        assertTrue(payload.path("tools").isMissingNode());
+        assertTrue(payload.path("tool_choice").isMissingNode());
+    }
+
+    @Test
     @SuppressWarnings({"rawtypes", "unchecked"})
     void shouldExecuteRequestedToolAndSendResultBackToModel() throws Exception {
         HttpClient httpClient = mock(HttpClient.class);

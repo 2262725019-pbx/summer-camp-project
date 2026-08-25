@@ -6,6 +6,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.summercamp.project.agent.AgentPlanningClient;
+import com.summercamp.project.agent.AgentSynthesisClient;
 import com.summercamp.project.config.AiChatProperties;
 import com.summercamp.project.intent.IntentClassificationClient;
 import com.summercamp.project.intent.IntentResult;
@@ -48,6 +49,7 @@ import org.springframework.stereotype.Component;
 @Component
 public class ZhipuAiClient implements
         AgentPlanningClient,
+        AgentSynthesisClient,
         ChatModelClient,
         ImageGenerationClient,
         IntentClassificationClient,
@@ -87,6 +89,15 @@ public class ZhipuAiClient implements
             IMAGE_GENERATION 将绘图描述放入 prompt；其他字段使用空字符串。
             输出格式：
             {"intent":"CHAT","location":"","period":"CURRENT","prompt":""}
+            """;
+    private static final String SYNTHESIS_INSTRUCTIONS = """
+            你是大学生智能健康生活规划 Agent 的最终汇总器。请用中文输出清晰、可执行的健康生活计划。
+            只能依据用户目标和应用提供的真实成功 Observation，不得臆造已执行的工具、天气、计算、
+            本地知识或 Skill 结果。不得输出内部 step id、JSON、调试信息或系统实现细节。
+            健康建议仅限一般生活、饮食、运动和作息规划，不得进行疾病诊断、药物或治疗建议；
+            有健康风险或不确定性时，提醒用户咨询合格医疗专业人员。
+            天气能力最多覆盖三日；若目标跨度超过三日，必须明确真实天气仅覆盖近期三天，
+            后续安排应采用不依赖具体天气数值的一般方案。
             """;
 
     private final AiChatProperties properties;
@@ -146,6 +157,24 @@ public class ZhipuAiClient implements
         String output = extractOutputText(response);
         if (output == null || output.isBlank()) {
             throw new LlmException("智谱规划响应中没有可用 JSON 文本");
+        }
+        return output.strip();
+    }
+
+    @Override
+    public String synthesize(String originalGoal, String observationContext) {
+        if (originalGoal == null || originalGoal.isBlank()) {
+            throw new IllegalArgumentException("originalGoal must not be blank");
+        }
+        if (observationContext == null || observationContext.isBlank()) {
+            throw new IllegalArgumentException("observationContext must not be blank");
+        }
+        JsonNode response = executeJson(
+                properties.chatEndpoint(),
+                buildSynthesisPayload(originalGoal, observationContext));
+        String output = extractOutputText(response);
+        if (output == null || output.isBlank()) {
+            throw new LlmException("智谱汇总响应中没有可用文本");
         }
         return output.strip();
     }
@@ -328,6 +357,21 @@ public class ZhipuAiClient implements
         ArrayNode messages = root.putArray("messages");
         messages.addObject().put("role", "system").put("content", instructions);
         messages.addObject().put("role", "user").put("content", goal);
+        return root;
+    }
+
+    ObjectNode buildSynthesisPayload(String originalGoal, String observationContext) {
+        ObjectNode root = objectMapper.createObjectNode();
+        root.put("model", properties.textModel());
+        root.put("stream", false);
+        root.put("temperature", 0.2);
+        root.putObject("thinking").put("type", "disabled");
+        ArrayNode messages = root.putArray("messages");
+        messages.addObject().put("role", "system").put("content", SYNTHESIS_INSTRUCTIONS);
+        messages.addObject().put("role", "user").put(
+                "content",
+                "用户目标：" + originalGoal.strip() + "\n\n" + observationContext
+        );
         return root;
     }
 
