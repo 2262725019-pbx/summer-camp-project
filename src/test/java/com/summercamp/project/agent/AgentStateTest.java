@@ -24,6 +24,9 @@ class AgentStateTest {
         );
         AgentObservation failed = new AgentObservation("weather", false, "天气服务暂不可用");
 
+        assertTrue(state.statuses().values().stream()
+                .allMatch(status -> status == AgentStepStatus.PENDING));
+
         state.recordObservation(completed);
         state.recordObservation(failed);
 
@@ -45,6 +48,22 @@ class AgentStateTest {
                 IllegalArgumentException.class,
                 () -> state.recordObservation(new AgentObservation("unknown", true, "unexpected"))
         );
+    }
+
+    @Test
+    void terminalObservationCannotBeOverwritten() {
+        AgentState state = new AgentState(plan());
+        AgentObservation first = new AgentObservation("datetime", true, "first result");
+        state.recordObservation(first);
+
+        IllegalStateException exception = assertThrows(
+                IllegalStateException.class,
+                () -> state.recordObservation(new AgentObservation("datetime", false, "replacement"))
+        );
+
+        assertEquals(first, state.findObservation("datetime").orElseThrow());
+        assertEquals(AgentStepStatus.COMPLETED, state.statusOf("datetime"));
+        assertTrue(exception.getMessage().contains("already recorded"));
     }
 
     @Test

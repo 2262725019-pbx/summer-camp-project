@@ -8,10 +8,11 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-public final class AgentState {
+public final class AgentState implements AgentStateView {
     private final String goal;
     private final AgentPlan plan;
     private final Set<String> planStepIds;
+    private final Map<String, AgentStepStatus> statusesByStepId = new LinkedHashMap<>();
     private final Map<String, AgentObservation> observationsByStepId = new LinkedHashMap<>();
 
     public AgentState(AgentPlan plan) {
@@ -21,6 +22,10 @@ public final class AgentState {
                 .map(AgentStep::id)
                 .filter(Objects::nonNull)
                 .collect(Collectors.toUnmodifiableSet());
+        if (planStepIds.size() != plan.steps().size()) {
+            throw new IllegalArgumentException("Plan step ids must be non-null and unique");
+        }
+        plan.steps().forEach(step -> statusesByStepId.put(step.id(), AgentStepStatus.PENDING));
     }
 
     public String goal() {
@@ -36,7 +41,34 @@ public final class AgentState {
         if (!planStepIds.contains(observation.stepId())) {
             throw new IllegalArgumentException("Unknown step id: " + observation.stepId());
         }
+        if (observationsByStepId.containsKey(observation.stepId())) {
+            throw new IllegalStateException("Terminal observation already recorded for step: "
+                    + observation.stepId());
+        }
+        AgentStepStatus currentStatus = statusesByStepId.get(observation.stepId());
+        if (currentStatus != AgentStepStatus.PENDING && currentStatus != AgentStepStatus.RUNNING) {
+            throw new IllegalStateException("Cannot record observation for step in status: " + currentStatus);
+        }
         observationsByStepId.put(observation.stepId(), observation);
+        statusesByStepId.put(
+                observation.stepId(),
+                observation.success() ? AgentStepStatus.COMPLETED : AgentStepStatus.FAILED
+        );
+    }
+
+    synchronized void markRunning(String stepId) {
+        requireStatus(stepId, AgentStepStatus.PENDING);
+        statusesByStepId.put(stepId, AgentStepStatus.RUNNING);
+    }
+
+    synchronized void markSkipped(String stepId, String reason) {
+        requireStatus(stepId, AgentStepStatus.PENDING);
+        if (observationsByStepId.containsKey(stepId)) {
+            throw new IllegalStateException("Terminal observation already recorded for step: " + stepId);
+        }
+        AgentObservation observation = new AgentObservation(stepId, false, reason);
+        observationsByStepId.put(stepId, observation);
+        statusesByStepId.put(stepId, AgentStepStatus.SKIPPED);
     }
 
     public synchronized Optional<AgentObservation> findObservation(String stepId) {
@@ -44,8 +76,16 @@ public final class AgentState {
     }
 
     public synchronized boolean isStepCompleted(String stepId) {
-        AgentObservation observation = observationsByStepId.get(stepId);
-        return observation != null && observation.success();
+        return statusesByStepId.get(stepId) == AgentStepStatus.COMPLETED;
+    }
+
+    public synchronized AgentStepStatus statusOf(String stepId) {
+        return findStatus(stepId)
+                .orElseThrow(() -> new IllegalArgumentException("Unknown step id: " + stepId));
+    }
+
+    public synchronized Map<String, AgentStepStatus> statuses() {
+        return Map.copyOf(statusesByStepId);
     }
 
     public synchronized List<AgentStep> completedSteps() {
@@ -56,5 +96,25 @@ public final class AgentState {
 
     public synchronized List<AgentObservation> observations() {
         return List.copyOf(observationsByStepId.values());
+    }
+
+    synchronized Optional<AgentStepStatus> findStatus(String stepId) {
+        return Optional.ofNullable(statusesByStepId.get(stepId));
+    }
+
+    synchronized boolean hasPendingSteps() {
+        return statusesByStepId.containsValue(AgentStepStatus.PENDING);
+    }
+
+    private void requireStatus(String stepId, AgentStepStatus expected) {
+        AgentStepStatus actual = statusesByStepId.get(stepId);
+        if (actual == null) {
+            throw new IllegalArgumentException("Unknown step id: " + stepId);
+        }
+        if (actual != expected) {
+            throw new IllegalStateException(
+                    "Step " + stepId + " must be " + expected + " but was " + actual
+            );
+        }
     }
 }
