@@ -1,5 +1,7 @@
 package com.summercamp.project.message;
 
+import com.summercamp.project.agent.HealthAgentResult;
+import com.summercamp.project.agent.HealthPlanAgent;
 import com.summercamp.project.conversation.ConversationMemoryStore;
 import com.summercamp.project.intent.IntentRecognizer;
 import com.summercamp.project.intent.IntentResult;
@@ -61,8 +63,9 @@ public class MessageProcessor {
             12. 发送“JSON格式化：{内容}”：校验并美化 JSON
             13. 发送“计算 125*36”：直接使用本地计算 Skill
             14. 项目配置和河南师范大学问题会先检索本地知识库，再由模型回答
-            15. /clear：清除当前用户的对话记录和待补充意图
-            16. /help：查看本帮助
+            15. 发送“帮我制定未来7天的完整增肌健康生活方案”：启动自主规划 Agent，自动协作天气、RAG、营养、运动、结果页和二维码
+            16. /clear：清除当前用户的对话记录、待补充意图和 Agent 状态
+            17. /help：查看本帮助
             当前版本暂不处理文件和视频。
             """;
 
@@ -79,6 +82,7 @@ public class MessageProcessor {
     private final RagRetriever ragRetriever;
     private final ConversationMemoryStore memoryStore;
     private final MessageDeduplicator deduplicator;
+    private final HealthPlanAgent healthPlanAgent;
 
     public MessageProcessor(
             WechatGateway gateway,
@@ -93,7 +97,8 @@ public class MessageProcessor {
             PendingSkillStore pendingSkillStore,
             RagRetriever ragRetriever,
             ConversationMemoryStore memoryStore,
-            MessageDeduplicator deduplicator) {
+            MessageDeduplicator deduplicator,
+            HealthPlanAgent healthPlanAgent) {
         this.gateway = gateway;
         this.chatClient = chatClient;
         this.imageClient = imageClient;
@@ -107,6 +112,7 @@ public class MessageProcessor {
         this.ragRetriever = ragRetriever;
         this.memoryStore = memoryStore;
         this.deduplicator = deduplicator;
+        this.healthPlanAgent = healthPlanAgent;
     }
 
     public void process(InboundMessage message) {
@@ -157,12 +163,37 @@ public class MessageProcessor {
         }
 
         String command = message.text().strip();
+        if ("/clear".equalsIgnoreCase(command)) {
+            memoryStore.clear(message.userId());
+            pendingWeatherStore.clear(message.userId());
+            pendingSkillStore.clear(message.userId());
+            healthPlanAgent.clear(message.userId());
+            sendReply(message, "已清除你的对话上下文、待处理请求和 Agent 运行状态。");
+            return;
+        }
+        if ("/help".equalsIgnoreCase(command)) {
+            sendReply(message, HELP_TEXT);
+            return;
+        }
+        if (healthPlanAgent.hasPending(message.userId()) || healthPlanAgent.supports(command)) {
+            if (isCancellation(command)) {
+                healthPlanAgent.clear(message.userId());
+                sendReply(message, "已取消待补充的健康规划 Agent 请求。");
+                return;
+            }
+            pendingWeatherStore.clear(message.userId());
+            pendingSkillStore.clear(message.userId());
+            executeHealthAgent(message);
+            return;
+        }
+
         IntentResult intent = intentRecognizer.recognize(command);
         if (intent.type() == IntentType.CLEAR_CONTEXT) {
             memoryStore.clear(message.userId());
             pendingWeatherStore.clear(message.userId());
             pendingSkillStore.clear(message.userId());
-            sendReply(message, "已清除你的对话上下文和待处理请求。");
+            healthPlanAgent.clear(message.userId());
+            sendReply(message, "已清除你的对话上下文、待处理请求和 Agent 运行状态。");
             return;
         }
         if (intent.type() == IntentType.HELP) {
@@ -294,6 +325,19 @@ public class MessageProcessor {
         } else {
             pendingSkillStore.clear(message.userId());
         }
+    }
+
+    private void executeHealthAgent(InboundMessage message) throws IOException {
+        LOGGER.info("执行健康生活规划 Agent");
+        HealthAgentResult result = healthPlanAgent.execute(
+                message.userId(), message.text(), memoryStore.history(message.userId()));
+        if (!result.reply().isBlank()) {
+            sendReply(message, result.reply());
+        }
+        for (HealthAgentResult.Media media : result.media()) {
+            gateway.sendImage(message.userId(), media.data(), media.fileName(), media.caption());
+        }
+        memoryStore.recordExchange(message.userId(), message.text().strip(), result.reply());
     }
 
     private void sendOutcome(InboundMessage message, ChatOutcome outcome) throws IOException {

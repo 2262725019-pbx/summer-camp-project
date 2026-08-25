@@ -3,8 +3,12 @@ package com.summercamp.project.message;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.summercamp.project.agent.HealthPlanAgent;
+import com.summercamp.project.agent.HealthAgentResult;
 import com.summercamp.project.config.RagProperties;
 import com.summercamp.project.conversation.InMemoryConversationMemoryStore;
 import com.summercamp.project.intent.IntentClassificationClient;
@@ -50,12 +54,14 @@ class MessageProcessorTest {
     private FakeModel model;
     private InMemoryConversationMemoryStore memory;
     private MessageProcessor processor;
+    private HealthPlanAgent healthPlanAgent;
 
     @BeforeEach
     void setUp() {
         gateway = new FakeGateway();
         model = new FakeModel();
         memory = new InMemoryConversationMemoryStore();
+        healthPlanAgent = mock(HealthPlanAgent.class);
         ObjectMapper objectMapper = new ObjectMapper();
         SkillRegistry skillRegistry = new SkillRegistry(List.of(
                 new MuscleGainMealPlanSkill(new FoodCatalog(objectMapper)),
@@ -73,7 +79,23 @@ class MessageProcessorTest {
                 new PendingSkillStore(),
                 new KeywordRagRetriever(new RagProperties(true, 3, 2, 2_500), objectMapper),
                 memory,
-                new MessageDeduplicator());
+                new MessageDeduplicator(),
+                healthPlanAgent);
+    }
+
+    @Test
+    void shouldRouteAComplexHealthGoalToTheAgent() {
+        String goal = "帮我制定未来7天的完整增肌健康生活方案";
+        when(healthPlanAgent.supports(goal)).thenReturn(true);
+        when(healthPlanAgent.execute("user-a", goal, List.of())).thenReturn(
+                HealthAgentResult.completed("健康计划已完成", List.of(
+                        new HealthAgentResult.Media(new byte[] {1, 2, 3}, "health-plan-qr.png", "二维码"))));
+
+        processor.process(textMessage("agent-1", "user-a", goal));
+
+        assertTrue(model.chatRequests.isEmpty());
+        assertEquals(List.of("健康计划已完成"), gateway.sentTexts);
+        assertArrayEquals(new byte[] {1, 2, 3}, gateway.sentImages.getFirst());
     }
 
     @Test
@@ -288,7 +310,7 @@ class MessageProcessorTest {
 
         assertTrue(memory.history("user-a").isEmpty());
         assertEquals(2, memory.history("user-b").size());
-        assertEquals("已清除你的对话上下文和待处理请求。", gateway.sentTexts.getLast());
+        assertEquals("已清除你的对话上下文、待处理请求和 Agent 运行状态。", gateway.sentTexts.getLast());
     }
 
     @Test

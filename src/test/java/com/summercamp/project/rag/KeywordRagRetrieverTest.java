@@ -64,6 +64,18 @@ class KeywordRagRetrieverTest {
         assertTrue(memory.promptContext().contains("30分钟"));
     }
 
+    @Test
+    void shouldRetrieveOfficialHealthKnowledgeForTheAgent() {
+        RagContext context = retriever(true, 4_000)
+                .retrieve("增肌健康生活的运动计划、平衡膳食和安全提示");
+
+        assertTrue(context.matched());
+        assertTrue(context.documentIds().contains("healthy-physical-activity"));
+        assertTrue(context.documentIds().contains("balanced-diet-guidelines"));
+        assertTrue(context.promptContext().contains("世界卫生组织"));
+        assertTrue(context.promptContext().contains("中国居民膳食指南"));
+    }
+
     private KeywordRagRetriever retriever(boolean enabled, int maxChars) {
         return new KeywordRagRetriever(
                 new RagProperties(enabled, 3, 2, maxChars),

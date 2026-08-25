@@ -76,5 +76,23 @@
     "title": "项目主要技术栈",
     "keywords": ["项目技术栈", "用了什么技术", "技术架构", "项目依赖", "怎么实现的", "Spring Boot版本", "Java版本"],
     "content": "项目使用Java 21、Spring Boot 4.1和Maven；微信接入使用iLink SDK；聊天、视觉、图片生成及语音识别使用智谱模型；天气使用高德Web服务；免费语音合成使用Microsoft Edge TTS；SILK语音通过silk-codec处理；二维码使用ZXing；数学表达式使用exp4j。机器人通过微信长轮询接收消息，同时提供临时结果页面。"
+  },
+  {
+    "id": "healthy-physical-activity",
+    "title": "健康成年人身体活动建议",
+    "keywords": ["健康生活", "身体活动", "运动计划", "训练安排", "增肌计划", "减脂计划", "体能计划"],
+    "content": "世界卫生组织建议成年人每周进行至少150～300分钟中等强度有氧活动，或75～150分钟高强度有氧活动，并在每周至少2天进行涉及主要肌群的力量训练。应根据个人能力循序渐进，减少久坐。来源：https://www.who.int/initiatives/behealthy/physical-activity"
+  },
+  {
+    "id": "balanced-diet-guidelines",
+    "title": "中国居民平衡膳食建议",
+    "keywords": ["健康生活", "饮食计划", "营养计划", "增肌饮食", "减脂饮食", "平衡膳食", "购物清单"],
+    "content": "《中国居民膳食指南（2022）》强调食物多样、合理搭配，吃动平衡并保持健康体重，多吃蔬果、奶类、全谷和大豆，适量摄入鱼、禽、蛋和瘦肉，少盐少油并控糖限酒。来源：https://dg.cnsoc.org/article/04/J4-AsD_DR3OLQMnHG0-jZA.html"
+  },
+  {
+    "id": "healthy-weight-safety",
+    "title": "体重管理与健康安全边界",
+    "keywords": ["健康生活", "体重管理", "减肥", "减脂", "健康体重", "安全提示", "作息计划"],
+    "content": "国家卫生健康委倡导把合理膳食、科学运动、良好睡眠和健康心理结合起来进行长期体重管理。个体存在疾病、伤病、孕期、进食障碍或药物影响时，应先获得专业医疗评估，不应仅依赖通用自动计划。来源：https://www.nhc.gov.cn/wjw/ylyjs/202412/b3d40e0141834897808ce6c9dce76a60/files/1736390749000_59785.pdf"
   }
 ]

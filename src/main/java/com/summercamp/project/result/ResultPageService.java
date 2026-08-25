@@ -84,6 +84,10 @@ public class ResultPageService {
         return baseUrl + "/results/" + page.id();
     }
 
+    public String publicBaseUrl() {
+        return baseUrl;
+    }
+
     private void cleanupExpired() {
         Instant now = clock.instant();
         pages.entrySet().removeIf(entry -> !entry.getValue().expiresAt().isAfter(now));
