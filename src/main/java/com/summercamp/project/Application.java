@@ -22,9 +22,6 @@ public class Application implements CommandLineRunner {
 
     @Override
     public void run(String... args) {
-        LOGGER.debug("[演示] DEBUG：用于记录开发调试信息");
-        LOGGER.info("[演示] INFO：Spring Boot 夏令营项目启动成功");
-        LOGGER.warn("[演示] WARN：用于记录需要关注但不影响运行的问题");
-        LOGGER.error("[演示] ERROR：用于记录导致功能失败的错误");
+
     }
 }

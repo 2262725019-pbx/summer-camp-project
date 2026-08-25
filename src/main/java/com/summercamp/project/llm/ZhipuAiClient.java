@@ -69,6 +69,9 @@ public class ZhipuAiClient implements
             复杂任务可以连续调用多个工具，后一步可以依据前一步的工具结果继续执行。
             工具返回 success=false 时，简洁说明失败原因；天气工具成功时必须保持数值和发布时间准确。
             不要声称执行了实际上没有执行的操作。
+            用户提出健康生活规划需求（如减重、增肌、改善作息）时，应调用 create_health_plan 工具，
+            并尽量从用户消息中提取参数（身高、体重、年龄、性别、每周运动次数、每次时长、所在城市）。
+            如果缺少必要参数，可先询问用户补齐，或使用默认值继续。
             """;
     private static final int MAX_ATTEMPTS = 2;
     private static final int MAX_TOOL_ROUNDS = 5;
