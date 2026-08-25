@@ -1,11 +1,14 @@
 package com.summercamp.project.agent;
 
 import java.util.Objects;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
 @Component
 public final class AgentOrchestrator {
     private static final String SAFE_FAILURE_REPLY = "未能完成本次健康生活规划，请稍后重试或调整目标。";
+    private static final Logger LOGGER = LoggerFactory.getLogger(AgentOrchestrator.class);
 
     private final AgentPlanner planner;
     private final AgentExecutor executor;
@@ -21,7 +24,8 @@ public final class AgentOrchestrator {
         try {
             plan = planner.plan(request.goal());
         } catch (RuntimeException exception) {
-            return new AgentRunResult(AgentRunResult.Status.FAILED, SAFE_FAILURE_REPLY, null, null);
+            return finish(new AgentRunResult(
+                    AgentRunResult.Status.FAILED, SAFE_FAILURE_REPLY, null, null));
         }
 
         AgentState state;
@@ -34,7 +38,8 @@ public final class AgentOrchestrator {
                     plan
             );
         } catch (RuntimeException exception) {
-            return new AgentRunResult(AgentRunResult.Status.FAILED, SAFE_FAILURE_REPLY, plan, null);
+            return finish(new AgentRunResult(
+                    AgentRunResult.Status.FAILED, SAFE_FAILURE_REPLY, plan, null));
         }
 
         AgentObservation waiting = plan.steps().stream()
@@ -44,12 +49,12 @@ public final class AgentOrchestrator {
                 .findFirst()
                 .orElse(null);
         if (waiting != null) {
-            return new AgentRunResult(
+            return finish(new AgentRunResult(
                     AgentRunResult.Status.NEEDS_USER_INPUT,
                     waiting.summary().isBlank() ? "请补充必要信息后继续。" : waiting.summary(),
                     plan,
                     state
-            );
+            ));
         }
 
         AgentStep synthesis = plan.steps().stream()
@@ -59,10 +64,21 @@ public final class AgentOrchestrator {
         if (synthesis != null && state.statusOf(synthesis.id()) == AgentStepStatus.COMPLETED) {
             AgentObservation result = state.findObservation(synthesis.id()).orElse(null);
             if (result != null && result.success()) {
-                return new AgentRunResult(AgentRunResult.Status.COMPLETED, result.summary(), plan, state);
+                return finish(new AgentRunResult(
+                        AgentRunResult.Status.COMPLETED, result.summary(), plan, state));
             }
         }
-        return new AgentRunResult(AgentRunResult.Status.FAILED, SAFE_FAILURE_REPLY, plan, state);
+        return finish(new AgentRunResult(
+                AgentRunResult.Status.FAILED, SAFE_FAILURE_REPLY, plan, state));
+    }
+
+    private AgentRunResult finish(AgentRunResult result) {
+        switch (result.status()) {
+            case COMPLETED -> LOGGER.info("Agent 执行完成：status=COMPLETED");
+            case NEEDS_USER_INPUT -> LOGGER.info("Agent 执行结束：status=NEEDS_USER_INPUT");
+            case FAILED -> LOGGER.warn("Agent 执行结束：status=FAILED");
+        }
+        return result;
     }
 
     private boolean needsUserInput(AgentObservation observation) {

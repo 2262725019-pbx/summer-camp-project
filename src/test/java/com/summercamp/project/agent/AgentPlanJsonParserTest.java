@@ -41,6 +41,13 @@ class AgentPlanJsonParserTest {
     }
 
     @Test
+    void rejectsBlankGoal() {
+        assertParseFailure(
+                validJson().replace("\"goal\":\"安排健康生活\"", "\"goal\":\"   \""),
+                "root.goal must be a non-blank string");
+    }
+
+    @Test
     void rejectsNonArraySteps() {
         assertParseFailure(
                 "{\"goal\":\"安排健康生活\",\"steps\":{}}",

@@ -10,6 +10,8 @@ import java.util.Objects;
 import java.util.Optional;
 
 abstract class AbstractSkillAgentActionHandler implements AgentActionHandler {
+    static final int MAX_SKILL_REQUEST_CHARS = 8_000;
+
     private final AgentAction action;
     private final String skillName;
     private final SkillRegistry skillRegistry;
@@ -50,10 +52,8 @@ abstract class AbstractSkillAgentActionHandler implements AgentActionHandler {
             );
         }
 
-        String request = step.inputs().getOrDefault("request", "").strip();
-        if (request.isBlank()) {
-            request = context.originalGoal();
-        }
+        String request = buildSkillRequest(
+                context.originalGoal(), step.inputs().getOrDefault("request", ""));
         SkillResult result = availableSkill.orElseThrow().execute(new SkillContext(
                 context.userId(),
                 request,
@@ -83,6 +83,27 @@ abstract class AbstractSkillAgentActionHandler implements AgentActionHandler {
                         "reply", result.reply()
                 )
         );
+    }
+
+    private String buildSkillRequest(String originalGoal, String stepRequest) {
+        String canonicalGoal = originalGoal == null ? "" : originalGoal.strip();
+        String supplement = stepRequest == null ? "" : stepRequest.strip();
+        String request;
+        if (supplement.isBlank()) {
+            request = canonicalGoal;
+        } else if (canonicalGoal.isBlank()) {
+            request = supplement;
+        } else {
+            request = canonicalGoal + "\n\n当前 Agent 步骤补充：" + supplement;
+        }
+        if (request.length() <= MAX_SKILL_REQUEST_CHARS) {
+            return request;
+        }
+        int end = MAX_SKILL_REQUEST_CHARS;
+        if (Character.isHighSurrogate(request.charAt(end - 1))) {
+            end--;
+        }
+        return request.substring(0, end);
     }
 
     private AgentObservation invalidInput(AgentStep step, String summary) {

@@ -64,6 +64,25 @@ class ValidateActionHandlerTest {
         assertEquals(ValidateActionHandler.UPSTREAM_STEP_FAILED, result.structuredData().get("code"));
     }
 
+    @Test
+    void rejectsMissingSuccessfulResultsForEveryExplicitRequiredDomain() {
+        assertMissingRequiredResult(
+                "制定运动计划",
+                List.of(AgentAction.GET_DATETIME, AgentAction.GET_WEATHER, AgentAction.RETRIEVE_KNOWLEDGE),
+                ValidateActionHandler.MISSING_REQUIRED_EXERCISE_RESULT
+        );
+        assertMissingRequiredResult(
+                "制定饮食计划",
+                List.of(AgentAction.GET_DATETIME, AgentAction.GET_WEATHER, AgentAction.RETRIEVE_KNOWLEDGE),
+                ValidateActionHandler.MISSING_REQUIRED_MEAL_RESULT
+        );
+        assertMissingRequiredResult(
+                "根据天气制定健康方案",
+                List.of(AgentAction.GET_DATETIME, AgentAction.RETRIEVE_KNOWLEDGE, AgentAction.CALCULATE),
+                ValidateActionHandler.MISSING_REQUIRED_WEATHER_RESULT
+        );
+    }
+
     private AgentState completedBusinessState(AgentPlan plan, boolean ragMatched) {
         AgentState state = new AgentState(plan);
         state.recordObservation(success("datetime"));
@@ -75,6 +94,49 @@ class ValidateActionHandlerTest {
 
     private AgentObservation success(String id) {
         return new AgentObservation(id, true, id + " completed");
+    }
+
+    private void assertMissingRequiredResult(
+            String goal,
+            List<AgentAction> businessActions,
+            String expectedCode
+    ) {
+        AgentPlan plan = coveragePlan(goal, businessActions);
+        AgentState state = new AgentState(plan);
+        plan.steps().stream()
+                .filter(candidate -> candidate.action() != AgentAction.VALIDATE
+                        && candidate.action() != AgentAction.SYNTHESIZE)
+                .forEach(candidate -> state.recordObservation(success(candidate.id())));
+
+        AgentStep validation = plan.steps().get(plan.steps().size() - 2);
+        AgentObservation result = handler.execute(validation, context(plan, state));
+
+        assertFalse(result.success());
+        assertEquals(expectedCode, result.structuredData().get("code"));
+    }
+
+    private AgentPlan coveragePlan(String goal, List<AgentAction> businessActions) {
+        java.util.ArrayList<AgentStep> steps = new java.util.ArrayList<>();
+        java.util.ArrayList<String> dependencies = new java.util.ArrayList<>();
+        for (int index = 0; index < businessActions.size(); index++) {
+            String id = "B" + (index + 1);
+            AgentAction action = businessActions.get(index);
+            steps.add(step(id, action, List.of(), validInputs(action)));
+            dependencies.add(id);
+        }
+        steps.add(step("validate", AgentAction.VALIDATE, dependencies, Map.of()));
+        steps.add(step("synthesis", AgentAction.SYNTHESIZE, List.of("validate"), Map.of()));
+        return new AgentPlan(goal, steps);
+    }
+
+    private Map<String, String> validInputs(AgentAction action) {
+        return switch (action) {
+            case GET_DATETIME -> Map.of();
+            case GET_WEATHER -> Map.of("location", "镇江", "period", "THREE_DAYS");
+            case RETRIEVE_KNOWLEDGE -> Map.of("query", "健康生活");
+            case CALCULATE -> Map.of("expression", "4 * 40");
+            default -> Map.of();
+        };
     }
 
     private AgentExecutionContext context(AgentPlan plan, AgentState state) {

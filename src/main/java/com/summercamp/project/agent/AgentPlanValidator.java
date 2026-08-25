@@ -145,10 +145,10 @@ public final class AgentPlanValidator {
         synthesisIndexes.addAll(actionIndexes(steps, AgentAction.SYNTHESIZE));
 
         if (validationIndexes.size() != 1) {
-            errors.add("Plan must contain exactly one VALIDATE step");
+            errors.add("Plan must contain exactly one VALIDATE step; found=" + validationIndexes.size());
         }
         if (synthesisIndexes.size() != 1) {
-            errors.add("Plan must contain exactly one SYNTHESIZE step");
+            errors.add("Plan must contain exactly one SYNTHESIZE step; found=" + synthesisIndexes.size());
         }
         if (validationIndexes.size() != 1 || synthesisIndexes.size() != 1) {
             return;

@@ -70,6 +70,10 @@ class ToolAgentActionHandlerTest {
         assertEquals("student-7", contextCaptor.getValue().userId());
         assertEquals("制定未来七天健康生活计划", contextCaptor.getValue().userText());
         assertEquals(history, contextCaptor.getValue().history());
+        assertEquals("镇江", observation.structuredData().get("location"));
+        assertEquals("THREE_DAYS", observation.structuredData().get("period"));
+        assertEquals("{\"success\":true,\"result\":\"ok\"}",
+                observation.structuredData().get("modelContent"));
     }
 
     @Test

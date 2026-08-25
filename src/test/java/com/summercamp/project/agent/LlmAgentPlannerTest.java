@@ -130,15 +130,60 @@ class LlmAgentPlannerTest {
     }
 
     @Test
-    void repairsPlanThatChangesTheRequestedGoal() {
+    void acceptsNonExactModelGoalWithoutRepairAndUsesCanonicalGoal() {
         String changedGoal = smallPlanJson(DAILY_GOAL).replace(DAILY_GOAL, "另一个目标");
         FakeAgentPlanningClient client = new FakeAgentPlanningClient()
-                .respondTo(DAILY_GOAL, changedGoal, smallPlanJson(DAILY_GOAL));
+                .respondTo(DAILY_GOAL, changedGoal);
 
         AgentPlan plan = planner(client).plan(DAILY_GOAL);
 
         assertEquals(DAILY_GOAL, plan.goal());
-        assertTrue(client.requests().getLast().instructions().contains("exactly match"));
+        assertEquals(1, client.requests().size());
+    }
+
+    @Test
+    void canonicalizesLongMultilineProductionStyleGoal() {
+        String requestedGoal = """
+                /agent 请帮我制定未来7天的大学生健康生活规划。
+                所在地：镇江市
+                性别：男
+                年龄：21
+                身高：175cm
+                体重：70kg
+                日常活动：轻度
+                每周训练：4次
+                每次训练：40分钟
+                每日餐数：4餐
+                健康确认：健康成人、无食物过敏
+                目前无明显身体不适。
+                运动目标是增肌，喜欢快走和自重训练。
+                希望未来7天兼顾饮食、运动、作息，并根据近期天气调整户外安排，
+                请直接给我一份完整可执行方案。
+                """.strip();
+        String modelPlan = sevenDayPlanJson()
+                .replace("制定未来7天大学生增肌健康生活方案", "未来7天大学生健康生活规划");
+        FakeAgentPlanningClient client = new FakeAgentPlanningClient()
+                .respondTo(requestedGoal, modelPlan);
+
+        AgentPlan plan = planner(client).plan(requestedGoal);
+
+        assertEquals(requestedGoal, plan.goal());
+        assertEquals(requestedGoal, client.requests().getFirst().goal());
+        assertEquals(1, client.requests().size());
+    }
+
+    @Test
+    void repairsPlanThatMissesExplicitExerciseRequirement() {
+        String goal = "未来7天兼顾饮食、运动、作息和天气";
+        FakeAgentPlanningClient client = new FakeAgentPlanningClient()
+                .respondTo(goal, missingExercisePlanJson(goal), sevenDayPlanJson());
+
+        AgentPlan plan = planner(client).plan(goal);
+
+        assertTrue(actions(plan).contains(AgentAction.RUN_EXERCISE_SKILL));
+        assertEquals(2, client.requests().size());
+        assertTrue(client.requests().getLast().instructions()
+                .contains(GoalCoverageValidator.MISSING_REQUIRED_EXERCISE_ACTION));
     }
 
     @Test
@@ -169,6 +214,7 @@ class LlmAgentPlannerTest {
         assertTrue(instructions.contains("每一步必须提供 inputs object"));
         assertTrue(instructions.contains("最多提供三日预报"));
         assertTrue(instructions.contains("不得声称取得真实 7 日天气"));
+        assertTrue(instructions.contains("canonical goal"));
     }
 
     @Test
@@ -214,6 +260,22 @@ class LlmAgentPlannerTest {
                     {"id":"S3","action":"RUN_EXERCISE_SKILL","description":"形成今日轻量运动安排","reason":"匹配今日作息目标","dependsOn":["S1","S2"],"inputs":{"request":"安排今天的轻量运动"}},
                     {"id":"S4","action":"VALIDATE","description":"检查今日计划信息完整性","reason":"确保真实结果完整且一致","dependsOn":["S3"],"inputs":{}},
                     {"id":"S5","action":"SYNTHESIZE","description":"汇总今日作息和运动计划","reason":"输出简洁的最终安排","dependsOn":["S4"],"inputs":{}}
+                  ]
+                }
+                """.formatted(goal);
+    }
+
+    private String missingExercisePlanJson(String goal) {
+        return """
+                {
+                  "goal": "%s",
+                  "steps": [
+                    {"id":"S1","action":"GET_DATETIME","description":"确定日期","reason":"建立计划时间范围","dependsOn":[],"inputs":{}},
+                    {"id":"S2","action":"GET_WEATHER","description":"获取三日天气","reason":"调整近期户外安排","dependsOn":["S1"],"inputs":{"location":"镇江","period":"THREE_DAYS"}},
+                    {"id":"S3","action":"RETRIEVE_KNOWLEDGE","description":"获取健康知识","reason":"支持一般作息安排","dependsOn":[],"inputs":{"query":"大学生健康作息"}},
+                    {"id":"S4","action":"RUN_MEAL_SKILL","description":"生成饮食方案","reason":"满足饮食要求","dependsOn":["S3"],"inputs":{"request":"生成七天饮食方案"}},
+                    {"id":"S5","action":"VALIDATE","description":"校验结果","reason":"确保执行闭环","dependsOn":["S2","S4"],"inputs":{}},
+                    {"id":"S6","action":"SYNTHESIZE","description":"汇总方案","reason":"输出完整方案","dependsOn":["S5"],"inputs":{}}
                   ]
                 }
                 """.formatted(goal);

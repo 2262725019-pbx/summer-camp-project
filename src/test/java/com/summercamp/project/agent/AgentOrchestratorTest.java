@@ -3,14 +3,70 @@ package com.summercamp.project.agent;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
 import org.junit.jupiter.api.Test;
+import org.slf4j.LoggerFactory;
 
 class AgentOrchestratorTest {
+    @Test
+    void logsEveryFinalStatusWithoutChangingOrchestratorResults() {
+        AgentPlan plan = plan("制定今日健康生活计划");
+        AgentOrchestrator completed = orchestrator(
+                plan, new ArrayList<>(), new AtomicInteger(), step -> successFor(step, false));
+        AgentOrchestrator waiting = orchestrator(
+                plan,
+                new ArrayList<>(),
+                new AtomicInteger(),
+                step -> step.action() == AgentAction.GET_WEATHER
+                        ? new AgentObservation(
+                                step.id(), false, "请补充所在城市",
+                                Map.of("code", "NEEDS_USER_INPUT", "recoverable", "true"))
+                        : successFor(step, false)
+        );
+        AgentOrchestrator failed = orchestrator(
+                plan,
+                new ArrayList<>(),
+                new AtomicInteger(),
+                step -> step.action() == AgentAction.GET_WEATHER
+                        ? new AgentObservation(
+                                step.id(), false, "天气服务失败", Map.of("code", "WEATHER_FAILED"))
+                        : successFor(step, false)
+        );
+        AgentRunRequest request = new AgentRunRequest("user-a", plan.goal(), List.of(), false);
+
+        Logger logger = (Logger) LoggerFactory.getLogger(AgentOrchestrator.class);
+        ListAppender<ILoggingEvent> appender = new ListAppender<>();
+        appender.start();
+        logger.addAppender(appender);
+        AgentRunResult completedResult;
+        AgentRunResult waitingResult;
+        AgentRunResult failedResult;
+        try {
+            completedResult = completed.run(request);
+            waitingResult = waiting.run(request);
+            failedResult = failed.run(request);
+        } finally {
+            logger.detachAppender(appender);
+            appender.stop();
+        }
+
+        assertEquals(AgentRunResult.Status.COMPLETED, completedResult.status());
+        assertEquals(AgentRunResult.Status.NEEDS_USER_INPUT, waitingResult.status());
+        assertEquals(AgentRunResult.Status.FAILED, failedResult.status());
+        assertEquals(List.of(
+                "Agent 执行完成：status=COMPLETED",
+                "Agent 执行结束：status=NEEDS_USER_INPUT",
+                "Agent 执行结束：status=FAILED"
+        ), appender.list.stream().map(ILoggingEvent::getFormattedMessage).toList());
+    }
+
     @Test
     void completesHappyPathWithValidateBeforeSynthesis() {
         AgentPlan plan = plan("制定今日健康生活计划");

@@ -51,7 +51,7 @@ class SkillAgentActionHandlerTest {
     }
 
     @Test
-    void mealUsesNamedSkillAndExplicitRequest() {
+    void mealPreservesOriginalGoalAndUsesExplicitRequestAsSupplement() {
         when(skillRegistry.findByName("muscle-gain-meal-plan")).thenReturn(Optional.of(skill));
         when(skill.execute(any())).thenReturn(SkillResult.completed("增肌饮食计划"));
         AgentStep step = step(
@@ -67,7 +67,31 @@ class SkillAgentActionHandlerTest {
         verify(skillRegistry).findByName("muscle-gain-meal-plan");
         ArgumentCaptor<SkillContext> contextCaptor = ArgumentCaptor.forClass(SkillContext.class);
         verify(skill).execute(contextCaptor.capture());
-        assertEquals("男，20岁，70kg，制定增肌饮食", contextCaptor.getValue().text());
+        assertEquals(
+                "original goal\n\n当前 Agent 步骤补充：男，20岁，70kg，制定增肌饮食",
+                contextCaptor.getValue().text()
+        );
+    }
+
+    @Test
+    void exercisePreservesOriginalConstraintsWhenPlannerRequestIsShort() {
+        when(skillRegistry.findByName("exercise-health-advice")).thenReturn(Optional.of(skill));
+        when(skill.execute(any())).thenReturn(SkillResult.completed("运动安排"));
+        String originalGoal = "21岁健康成人，每周训练4次，每次40分钟，喜欢快走和自重训练";
+        AgentStep step = step(
+                AgentAction.RUN_EXERCISE_SKILL,
+                Map.of("request", "生成七天运动方案")
+        );
+
+        new ExerciseSkillAgentActionHandler(skillRegistry).execute(
+                step, context("user", originalGoal, List.of(), false, step));
+
+        ArgumentCaptor<SkillContext> contextCaptor = ArgumentCaptor.forClass(SkillContext.class);
+        verify(skill).execute(contextCaptor.capture());
+        assertTrue(contextCaptor.getValue().text().startsWith(originalGoal));
+        assertTrue(contextCaptor.getValue().text().contains("当前 Agent 步骤补充：生成七天运动方案"));
+        assertTrue(contextCaptor.getValue().text().length()
+                <= AbstractSkillAgentActionHandler.MAX_SKILL_REQUEST_CHARS);
     }
 
     @Test

@@ -78,6 +78,44 @@ class SynthesizeActionHandlerTest {
         assertFalse(failed.summary().contains("provider"));
     }
 
+    @Test
+    void missingRequiredExerciseResultFailsValidationAndBlocksSynthesisClient() {
+        AgentPlan plan = new AgentPlan("未来7天需要运动安排", List.of(
+                step("datetime", AgentAction.GET_DATETIME, List.of()),
+                new AgentStep(
+                        "weather", AgentAction.GET_WEATHER, "执行", "原因", List.of("datetime"),
+                        Map.of("location", "镇江", "period", "THREE_DAYS")),
+                new AgentStep(
+                        "rag", AgentAction.RETRIEVE_KNOWLEDGE, "执行", "原因", List.of(),
+                        Map.of("query", "健康生活")),
+                step("validate", AgentAction.VALIDATE, List.of("weather", "rag")),
+                step("synthesis", AgentAction.SYNTHESIZE, List.of("validate"))
+        ));
+        AgentState state = new AgentState(plan);
+        state.recordObservation(new AgentObservation("datetime", true, "日期"));
+        state.recordObservation(new AgentObservation("weather", true, "三日天气"));
+        state.recordObservation(new AgentObservation("rag", true, "健康知识"));
+        AgentExecutionContext context = new AgentExecutionContext(plan.goal(), state, plan);
+        AgentObservation validation = new ValidateActionHandler()
+                .execute(plan.steps().get(3), context);
+        state.recordObservation(validation);
+        AtomicInteger calls = new AtomicInteger();
+
+        AgentObservation synthesis = new SynthesizeActionHandler(
+                new AgentSynthesisContextBuilder(), (goal, grounding) -> {
+                    calls.incrementAndGet();
+                    return "不应调用";
+                }).execute(plan.steps().getLast(), context);
+
+        assertFalse(validation.success());
+        assertEquals(
+                ValidateActionHandler.MISSING_REQUIRED_EXERCISE_RESULT,
+                validation.structuredData().get("code")
+        );
+        assertFalse(synthesis.success());
+        assertEquals(0, calls.get());
+    }
+
     private AgentState validatedState(AgentPlan plan) {
         AgentState state = new AgentState(plan);
         state.recordObservation(new AgentObservation("datetime", true, "日期"));

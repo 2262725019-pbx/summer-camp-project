@@ -77,18 +77,20 @@ abstract class AbstractToolAgentActionHandler implements AgentActionHandler {
         ToolRegistry.Invocation invocation = toolRegistry.invoke(toolName, argumentJson, toolContext);
         String content = safeContent(invocation == null ? null : invocation.modelContent());
         if (invocation == null || !invocation.success()) {
-            Map<String, String> data = new LinkedHashMap<>();
+            Map<String, String> data = new LinkedHashMap<>(observationData(step, content));
             data.put("code", "TOOL_EXECUTION_FAILED");
-            data.put("tool", toolName);
-            data.put("modelContent", content);
             return new AgentObservation(step.id(), false, failureSummary(content), data);
         }
         return new AgentObservation(
                 step.id(),
                 true,
                 "Tool " + toolName + " completed successfully",
-                Map.of("tool", toolName, "modelContent", content)
+                observationData(step, content)
         );
+    }
+
+    protected Map<String, String> observationData(AgentStep step, String content) {
+        return Map.of("tool", toolName, "modelContent", content);
     }
 
     private AgentObservation invalidInput(AgentStep step, String summary) {

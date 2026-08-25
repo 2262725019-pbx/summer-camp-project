@@ -1,6 +1,7 @@
 package com.summercamp.project.agent;
 
 import java.util.EnumSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -13,6 +14,12 @@ public final class ValidateActionHandler implements AgentActionHandler {
     public static final String NEEDS_USER_INPUT = "NEEDS_USER_INPUT";
     public static final String UPSTREAM_STEP_FAILED = "UPSTREAM_STEP_FAILED";
     public static final String INCOMPLETE_EXECUTION = "INCOMPLETE_EXECUTION";
+    public static final String MISSING_REQUIRED_EXERCISE_RESULT =
+            "MISSING_REQUIRED_EXERCISE_RESULT";
+    public static final String MISSING_REQUIRED_MEAL_RESULT =
+            "MISSING_REQUIRED_MEAL_RESULT";
+    public static final String MISSING_REQUIRED_WEATHER_RESULT =
+            "MISSING_REQUIRED_WEATHER_RESULT";
 
     private static final Set<AgentAction> BUSINESS_ACTIONS = EnumSet.of(
             AgentAction.GET_DATETIME,
@@ -25,6 +32,7 @@ public final class ValidateActionHandler implements AgentActionHandler {
     );
 
     private final AgentPlanValidator planValidator = new AgentPlanValidator();
+    private final GoalRequirementExtractor requirementExtractor = new GoalRequirementExtractor();
 
     @Override
     public AgentAction action() {
@@ -42,6 +50,10 @@ public final class ValidateActionHandler implements AgentActionHandler {
         }
 
         AgentStateView state = context.state();
+        AgentObservation coverageFailure = validateRequiredResults(context, step);
+        if (coverageFailure != null) {
+            return coverageFailure;
+        }
         for (String dependencyId : step.dependsOn()) {
             AgentStepStatus dependencyStatus = state.statusOf(dependencyId);
             Optional<AgentObservation> dependencyObservation = state.findObservation(dependencyId);
@@ -88,6 +100,61 @@ public final class ValidateActionHandler implements AgentActionHandler {
                 "计划所需信息已完成一致性校验",
                 Map.of("code", VALIDATION_PASSED)
         );
+    }
+
+    private AgentObservation validateRequiredResults(
+            AgentExecutionContext context,
+            AgentStep validationStep
+    ) {
+        Set<GoalRequirement> requirements = requirementExtractor.extract(context.originalGoal());
+        for (GoalRequirement requirement : List.of(
+                GoalRequirement.EXERCISE,
+                GoalRequirement.MEAL,
+                GoalRequirement.WEATHER)) {
+            if (!requirements.contains(requirement)) {
+                continue;
+            }
+            List<AgentStep> capabilitySteps = context.plan().steps().stream()
+                    .filter(candidate -> candidate.action() == requirement.requiredAction())
+                    .toList();
+            Optional<AgentObservation> waiting = capabilitySteps.stream()
+                    .map(candidate -> context.state().findObservation(candidate.id()).orElse(null))
+                    .filter(java.util.Objects::nonNull)
+                    .filter(this::needsUserInput)
+                    .findFirst();
+            if (waiting.isPresent()) {
+                return failure(
+                        validationStep,
+                        NEEDS_USER_INPUT,
+                        safeUserInputSummary(waiting.orElseThrow()),
+                        true
+                );
+            }
+            boolean completed = capabilitySteps.stream().anyMatch(candidate ->
+                    context.state().statusOf(candidate.id()) == AgentStepStatus.COMPLETED
+                            && context.state().findObservation(candidate.id())
+                            .map(AgentObservation::success)
+                            .orElse(false));
+            if (!completed) {
+                return failure(
+                        validationStep,
+                        missingResultCode(requirement),
+                        "原始目标要求的关键能力没有成功执行结果",
+                        false
+                );
+            }
+        }
+        return null;
+    }
+
+    private String missingResultCode(GoalRequirement requirement) {
+        return switch (requirement) {
+            case EXERCISE -> MISSING_REQUIRED_EXERCISE_RESULT;
+            case MEAL -> MISSING_REQUIRED_MEAL_RESULT;
+            case WEATHER -> MISSING_REQUIRED_WEATHER_RESULT;
+            case LIFESTYLE -> throw new IllegalArgumentException(
+                    "LIFESTYLE does not require a runtime capability result");
+        };
     }
 
     private boolean needsUserInput(AgentObservation observation) {

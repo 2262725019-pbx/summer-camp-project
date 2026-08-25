@@ -31,6 +31,8 @@ public final class LlmAgentPlanner implements AgentPlanner {
             规划约束：
             1. 输出 3～12 个步骤，并至少包含 3 个不同且与目标相关的业务子任务。
             2. 根据 Goal 自主选择必要能力，不要为了凑数量规划无关能力。
+               Goal 明确要求运动时必须包含 RUN_EXERCISE_SKILL；明确要求饮食时必须包含
+               RUN_MEAL_SKILL；明确要求天气时必须包含 GET_WEATHER。作息可在最终汇总中整合。
             3. dependsOn 中只能填写其他步骤的 step id；依赖必须存在、不得自依赖、不得形成环。
             4. 必须生成完整闭环：所有业务步骤 → 一个 VALIDATE → 一个 SYNTHESIZE。
                VALIDATE 必须直接或间接依赖全部业务分支；所有业务步骤必须位于 VALIDATE 前，
@@ -55,7 +57,7 @@ public final class LlmAgentPlanner implements AgentPlanner {
 
             只能返回一个 JSON object，不得返回 Markdown、代码围栏、解释或其他文本。严格结构：
             {
-              "goal": "必须与用户原始 Goal 完全一致",
+              "goal": "非空字符串，可简要复述用户目标；应用会使用原始 Goal 作为 canonical goal",
               "steps": [
                 {
                   "id": "S1",
@@ -76,20 +78,29 @@ public final class LlmAgentPlanner implements AgentPlanner {
     private final AgentPlanningClient planningClient;
     private final AgentPlanJsonParser jsonParser;
     private final AgentPlanValidator validator;
+    private final GoalCoverageValidator coverageValidator;
 
     @Autowired
     public LlmAgentPlanner(AgentPlanningClient planningClient, ObjectMapper objectMapper) {
-        this(planningClient, new AgentPlanJsonParser(objectMapper), new AgentPlanValidator());
+        this(
+                planningClient,
+                new AgentPlanJsonParser(objectMapper),
+                new AgentPlanValidator(),
+                new GoalCoverageValidator()
+        );
     }
 
     LlmAgentPlanner(
             AgentPlanningClient planningClient,
             AgentPlanJsonParser jsonParser,
-            AgentPlanValidator validator
+            AgentPlanValidator validator,
+            GoalCoverageValidator coverageValidator
     ) {
         this.planningClient = Objects.requireNonNull(planningClient, "planningClient must not be null");
         this.jsonParser = Objects.requireNonNull(jsonParser, "jsonParser must not be null");
         this.validator = Objects.requireNonNull(validator, "validator must not be null");
+        this.coverageValidator = Objects.requireNonNull(
+                coverageValidator, "coverageValidator must not be null");
     }
 
     @Override
@@ -97,7 +108,7 @@ public final class LlmAgentPlanner implements AgentPlanner {
         if (goal == null || goal.isBlank()) {
             throw new AgentPlanningException("Agent goal must not be blank");
         }
-        String requestedGoal = goal.strip();
+        String requestedGoal = goal;
         LOGGER.info("Agent 规划开始");
 
         String instructions = INITIAL_INSTRUCTIONS;
@@ -115,6 +126,13 @@ public final class LlmAgentPlanner implements AgentPlanner {
                 LOGGER.info("Agent 规划完成：steps={}", result.plan().steps().size());
                 return result.plan();
             }
+            List<AgentPlanErrorCode> errorCodes = AgentPlanErrorClassifier.classify(result.errors());
+            LOGGER.warn(
+                    "Agent 计划无效：attempt={}, errorCount={}, errors={}",
+                    attempt + 1,
+                    result.errors().size(),
+                    errorCodes
+            );
             if (attempt < MAX_REPAIR_ATTEMPTS) {
                 LOGGER.warn("Agent 计划第一次校验失败，尝试修复");
                 instructions = repairInstructions(result.errors());
@@ -129,25 +147,24 @@ public final class LlmAgentPlanner implements AgentPlanner {
     }
 
     private AttemptResult parseAndValidate(String rawPlan, String requestedGoal) {
-        AgentPlan plan;
+        AgentPlan parsedPlan;
         try {
-            plan = jsonParser.parse(rawPlan);
+            parsedPlan = jsonParser.parse(rawPlan);
         } catch (AgentPlanParseException exception) {
             return AttemptResult.invalid(List.of(exception.getMessage()));
         }
 
-        List<String> errors = new ArrayList<>(validator.validate(plan).errors());
-        if (!requestedGoal.equals(plan.goal())) {
-            errors.add("Plan goal must exactly match the requested goal");
-        }
-        return errors.isEmpty() ? AttemptResult.valid(plan) : AttemptResult.invalid(errors);
+        List<String> errors = new ArrayList<>(validator.validate(parsedPlan).errors());
+        errors.addAll(coverageValidator.validate(requestedGoal, parsedPlan).errors());
+        AgentPlan canonicalPlan = new AgentPlan(requestedGoal, parsedPlan.steps());
+        return errors.isEmpty() ? AttemptResult.valid(canonicalPlan) : AttemptResult.invalid(errors);
     }
 
     private String repairInstructions(List<String> errors) {
         return INITIAL_INSTRUCTIONS + """
 
                 上一次输出未通过结构解析或计划校验。请依据下面的结构化错误修复计划。
-                原始 Goal 仍由 user 消息提供，必须原样保留。只返回修正后的 JSON object。
+                goal 字段保持非空即可，应用会使用 user 消息中的原始 Goal。只返回修正后的 JSON object。
                 错误：
                 """ + summarizeErrors(errors);
     }

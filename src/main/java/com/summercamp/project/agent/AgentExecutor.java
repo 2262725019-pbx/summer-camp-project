@@ -4,11 +4,14 @@ import com.summercamp.project.llm.ChatMessage;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
 @Component
 public final class AgentExecutor {
     public static final int MAX_EXECUTED_STEPS = AgentPlanValidator.MAX_STEPS;
+    private static final Logger LOGGER = LoggerFactory.getLogger(AgentExecutor.class);
 
     private final AgentActionHandlerRegistry handlerRegistry;
 
@@ -74,10 +77,13 @@ public final class AgentExecutor {
     }
 
     private void executeStep(AgentStep step, AgentExecutionContext context) {
+        LOGGER.info(AgentRuntimeDiagnostics.stepStarted(step.action()));
         AgentActionHandler handler;
         try {
             handler = handlerRegistry.find(step.action());
         } catch (AgentActionHandlerNotFoundException exception) {
+            LOGGER.warn(AgentRuntimeDiagnostics.stepFailed(
+                    step.action(), AgentRuntimeDiagnostics.MISSING_HANDLER, false));
             throw new AgentExecutionException(
                     AgentExecutionFailureReason.MISSING_HANDLER,
                     "Cannot execute step " + step.id() + ": " + exception.getMessage(),
@@ -98,6 +104,11 @@ public final class AgentExecutor {
             );
         }
         state.recordObservation(observation);
+        if (observation.success()) {
+            LOGGER.info(AgentRuntimeDiagnostics.stepCompleted(step.action()));
+        } else {
+            LOGGER.warn(AgentRuntimeDiagnostics.stepFailed(step.action(), observation));
+        }
     }
 
     private AgentObservation normalizeObservation(AgentStep step, AgentObservation observation) {
@@ -131,6 +142,7 @@ public final class AgentExecutor {
                                 "Skipped because dependency " + dependencyId
                                         + " ended as " + dependencyStatus.orElseThrow()
                         );
+                        LOGGER.warn(AgentRuntimeDiagnostics.stepSkipped(step.action()));
                         changed = true;
                         break;
                     }
