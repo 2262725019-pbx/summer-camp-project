@@ -11,6 +11,15 @@ import org.junit.jupiter.api.Test;
 class IntentRecognizerTest {
 
     @Test
+    void recognizesNaturalHelpQuestions() {
+        IntentRecognizer recognizer = new IntentRecognizer(text -> Optional.empty());
+
+        assertEquals(IntentType.HELP, recognizer.recognize("你有什么功能？").type());
+        assertEquals(IntentType.HELP, recognizer.recognize("怎么用").type());
+        assertEquals(IntentType.HELP, recognizer.recognize("功能列表").type());
+    }
+
+    @Test
     void recognizesWeatherLocationAndPeriodLocally() {
         IntentRecognizer recognizer = new IntentRecognizer(text -> Optional.empty());
 

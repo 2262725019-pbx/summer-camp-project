@@ -3,6 +3,7 @@ package com.summercamp.project.intent;
 import com.summercamp.project.weather.WeatherPeriod;
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.slf4j.Logger;
@@ -65,6 +66,8 @@ public class IntentRecognizer {
             "现在几点|当前时间|今天几号|日期|星期几|周几");
     private static final Pattern QR_TOOL_WORDS = Pattern.compile("二维码|QR码|qr码");
     private static final Pattern PUNCTUATION = Pattern.compile("[\\s，,。.!！?？：:；;、]+$");
+    private static final Set<String> HELP_COMMANDS = Set.of(
+            "/help", "帮助", "使用说明", "怎么用", "功能列表", "你会什么", "有什么功能", "你有什么功能");
 
     private final IntentClassificationClient classificationClient;
 
@@ -81,7 +84,8 @@ public class IntentRecognizer {
         if ("/clear".equals(lower) || "清除上下文".equals(command) || "清空上下文".equals(command)) {
             return IntentResult.simple(IntentType.CLEAR_CONTEXT);
         }
-        if ("/help".equals(lower) || "帮助".equals(command)) {
+        String normalizedCommand = PUNCTUATION.matcher(lower).replaceAll("").strip();
+        if (HELP_COMMANDS.contains(normalizedCommand)) {
             return IntentResult.simple(IntentType.HELP);
         }
         if (lower.equals("/image") || lower.startsWith("/image ")) {

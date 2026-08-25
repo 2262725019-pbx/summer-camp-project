@@ -22,6 +22,7 @@ import com.summercamp.project.llm.LlmException;
 import com.summercamp.project.rag.KeywordRagRetriever;
 import com.summercamp.project.skill.PendingSkillStore;
 import com.summercamp.project.skill.SkillRegistry;
+import com.summercamp.project.skill.entertainment.ColdJokeSkill;
 import com.summercamp.project.skill.nutrition.FoodCatalog;
 import com.summercamp.project.skill.nutrition.MuscleGainMealPlanSkill;
 import com.summercamp.project.speech.SpeechToTextClient;
@@ -57,7 +58,8 @@ class MessageProcessorTest {
         memory = new InMemoryConversationMemoryStore();
         ObjectMapper objectMapper = new ObjectMapper();
         SkillRegistry skillRegistry = new SkillRegistry(List.of(
-                new MuscleGainMealPlanSkill(new FoodCatalog(objectMapper))));
+                new MuscleGainMealPlanSkill(new FoodCatalog(objectMapper)),
+                new ColdJokeSkill()));
         processor = new MessageProcessor(
                 gateway,
                 model,
@@ -160,6 +162,15 @@ class MessageProcessorTest {
         assertTrue(gateway.sentTexts.getLast().contains("训练日目标"));
         assertTrue(gateway.sentTexts.getLast().contains("休息日目标"));
         assertEquals(4, memory.history("user-a").size());
+    }
+
+    @Test
+    void shouldExecuteColdJokeSkillWithoutCallingLlm() {
+        processor.process(textMessage("joke-1", "user-a", "给我讲个冷笑话"));
+
+        assertTrue(model.chatRequests.isEmpty());
+        assertTrue(gateway.sentTexts.getFirst().startsWith("给你讲一个冷笑话："));
+        assertEquals(2, memory.history("user-a").size());
     }
 
     @Test

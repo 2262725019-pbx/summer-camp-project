@@ -36,6 +36,34 @@ class KeywordRagRetrieverTest {
         assertTrue(context.promptContext().length() <= 220);
     }
 
+    @Test
+    void shouldRetrieveHenanNormalUniversityKnowledge() {
+        KeywordRagRetriever retriever = retriever(true, 2_500);
+
+        RagContext overview = retriever.retrieve("请介绍一下河南师范大学信息");
+        RagContext campus = retriever.retrieve("河师大在哪里，有哪些校区？");
+
+        assertTrue(overview.matched());
+        assertEquals("hnnu-overview", overview.hits().getFirst().document().id());
+        assertTrue(overview.promptContext().contains("1923年"));
+        assertTrue(campus.matched());
+        assertEquals("hnnu-campuses", campus.hits().getFirst().document().id());
+        assertTrue(campus.promptContext().contains("建设路校区"));
+    }
+
+    @Test
+    void shouldRetrieveUniqueKnowledgeMergedFromRemoteBranches() {
+        KeywordRagRetriever retriever = retriever(true, 2_500);
+
+        RagContext calling = retriever.retrieve("Function Calling 如何执行多工具调用？");
+        RagContext memory = retriever.retrieve("机器人的上下文保存多久？");
+
+        assertEquals("function-calling", calling.hits().getFirst().document().id());
+        assertTrue(calling.promptContext().contains("JSON Schema"));
+        assertEquals("conversation-memory", memory.hits().getFirst().document().id());
+        assertTrue(memory.promptContext().contains("30分钟"));
+    }
+
     private KeywordRagRetriever retriever(boolean enabled, int maxChars) {
         return new KeywordRagRetriever(
                 new RagProperties(enabled, 3, 2, maxChars),
