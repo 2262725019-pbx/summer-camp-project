@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.summercamp.project.agent.AgentPlanningClient;
 import com.summercamp.project.config.AiChatProperties;
 import com.summercamp.project.intent.IntentClassificationClient;
 import com.summercamp.project.intent.IntentResult;
@@ -46,6 +47,7 @@ import org.springframework.stereotype.Component;
 /** 智谱开放平台客户端，负责对话、多模态、意图分类和语音能力。 */
 @Component
 public class ZhipuAiClient implements
+        AgentPlanningClient,
         ChatModelClient,
         ImageGenerationClient,
         IntentClassificationClient,
@@ -128,6 +130,24 @@ public class ZhipuAiClient implements
             }
         }
         throw lastFailure == null ? new LlmException("没有可用的智谱模型") : lastFailure;
+    }
+
+    @Override
+    public String generatePlan(String goal, String instructions) {
+        if (goal == null || goal.isBlank()) {
+            throw new IllegalArgumentException("goal must not be blank");
+        }
+        if (instructions == null || instructions.isBlank()) {
+            throw new IllegalArgumentException("instructions must not be blank");
+        }
+        JsonNode response = executeJson(
+                properties.chatEndpoint(),
+                buildPlanningPayload(goal, instructions));
+        String output = extractOutputText(response);
+        if (output == null || output.isBlank()) {
+            throw new LlmException("智谱规划响应中没有可用 JSON 文本");
+        }
+        return output.strip();
     }
 
     private ChatOutcome chatWithModel(ChatRequest request, String model, ToolContext context) {
@@ -296,6 +316,19 @@ public class ZhipuAiClient implements
         return buildChatPayload(request, request.images().isEmpty()
                 ? properties.textModel()
                 : properties.visionModel());
+    }
+
+    ObjectNode buildPlanningPayload(String goal, String instructions) {
+        ObjectNode root = objectMapper.createObjectNode();
+        root.put("model", properties.textModel());
+        root.put("stream", false);
+        root.put("temperature", 0.2);
+        root.putObject("thinking").put("type", "disabled");
+        root.putObject("response_format").put("type", "json_object");
+        ArrayNode messages = root.putArray("messages");
+        messages.addObject().put("role", "system").put("content", instructions);
+        messages.addObject().put("role", "user").put("content", goal);
+        return root;
     }
 
     private ObjectNode buildChatPayload(ChatRequest request, String model) {

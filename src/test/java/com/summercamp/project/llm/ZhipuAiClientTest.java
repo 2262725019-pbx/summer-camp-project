@@ -9,6 +9,7 @@ import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.JsonNode;
@@ -119,6 +120,38 @@ class ZhipuAiClientTest {
                 .contains("config/application-local.properties"));
         assertEquals("API Key 在哪里配置？", payload.path("messages").get(2)
                 .path("content").asText());
+    }
+
+    @Test
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    void shouldGeneratePlanningJsonWithoutExposingOrCallingTools() throws Exception {
+        HttpClient httpClient = mock(HttpClient.class);
+        HttpResponse<String> response = mock(HttpResponse.class);
+        ToolRegistry toolRegistry = mock(ToolRegistry.class);
+        String rawPlan = "{\"goal\":\"健康计划\",\"steps\":[]}";
+        var responseBody = objectMapper.createObjectNode();
+        responseBody.putArray("choices")
+                .addObject()
+                .putObject("message")
+                .put("content", rawPlan);
+        when(response.statusCode()).thenReturn(200);
+        when(response.body()).thenReturn(objectMapper.writeValueAsString(responseBody));
+        doReturn(response).when(httpClient).send(
+                any(HttpRequest.class), any(HttpResponse.BodyHandler.class));
+        ZhipuAiClient planningClient = newClient(httpClient, toolRegistry);
+
+        String result = planningClient.generatePlan("健康计划", "只返回 JSON");
+        JsonNode payload = planningClient.buildPlanningPayload("健康计划", "只返回 JSON");
+
+        assertEquals(rawPlan, result);
+        assertEquals("json_object", payload.path("response_format").path("type").asText());
+        assertEquals("disabled", payload.path("thinking").path("type").asText());
+        assertEquals("system", payload.path("messages").get(0).path("role").asText());
+        assertEquals("只返回 JSON", payload.path("messages").get(0).path("content").asText());
+        assertEquals("健康计划", payload.path("messages").get(1).path("content").asText());
+        assertTrue(payload.path("tools").isMissingNode());
+        assertTrue(payload.path("tool_choice").isMissingNode());
+        verifyNoInteractions(toolRegistry);
     }
 
     @Test
