@@ -11,6 +11,7 @@ import static org.mockito.Mockito.when;
 import com.summercamp.project.llm.ChatMessage;
 import com.summercamp.project.skill.BotSkill;
 import com.summercamp.project.skill.SkillContext;
+import com.summercamp.project.skill.SkillExecutionMode;
 import com.summercamp.project.skill.SkillRegistry;
 import com.summercamp.project.skill.SkillResult;
 import java.util.List;
@@ -48,6 +49,7 @@ class SkillAgentActionHandlerTest {
         assertEquals("为健康成年人安排今天的运动", contextCaptor.getValue().text());
         assertEquals(history, contextCaptor.getValue().history());
         assertTrue(contextCaptor.getValue().voiceMessage());
+        assertEquals(SkillExecutionMode.AGENT, contextCaptor.getValue().executionMode());
     }
 
     @Test

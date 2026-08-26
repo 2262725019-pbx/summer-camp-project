@@ -105,9 +105,15 @@ public final class LlmAgentPlanner implements AgentPlanner {
 
     @Override
     public AgentPlan plan(String goal) {
+        return plan(goal, AgentRunMetrics.unobserved());
+    }
+
+    @Override
+    public AgentPlan plan(String goal, AgentRunMetrics metrics) {
         if (goal == null || goal.isBlank()) {
             throw new AgentPlanningException("Agent goal must not be blank");
         }
+        Objects.requireNonNull(metrics, "metrics must not be null");
         String requestedGoal = goal;
         LOGGER.info("Agent 规划开始");
 
@@ -115,7 +121,11 @@ public final class LlmAgentPlanner implements AgentPlanner {
         for (int attempt = 0; attempt <= MAX_REPAIR_ATTEMPTS; attempt++) {
             String rawPlan;
             try {
-                rawPlan = planningClient.generatePlan(requestedGoal, instructions);
+                metrics.recordPlannerInputChars(requestedGoal.length(), instructions.length());
+                rawPlan = planningClient.generatePlan(
+                        requestedGoal,
+                        instructions,
+                        metrics.withLlmPhase(AgentRunMetrics.LlmPhase.PLANNING));
             } catch (RuntimeException exception) {
                 LOGGER.error("Agent 规划失败");
                 throw new AgentPlanningException("Agent planning client failed", exception);

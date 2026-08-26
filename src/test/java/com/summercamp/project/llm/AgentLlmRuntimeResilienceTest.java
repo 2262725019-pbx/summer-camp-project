@@ -12,6 +12,8 @@ import static org.mockito.Mockito.verify;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.summercamp.project.agent.AgentPlan;
+import com.summercamp.project.agent.AgentRunMetrics;
+import com.summercamp.project.agent.AgentRunMetricsCollector;
 import com.summercamp.project.agent.LlmAgentPlanner;
 import com.summercamp.project.config.AiChatProperties;
 import com.summercamp.project.speech.WechatAudioConverter;
@@ -70,9 +72,16 @@ class AgentLlmRuntimeResilienceTest {
                 successResponse("{\"goal\":\"健康计划\",\"steps\":[]}"));
         ZhipuAiClient client = client(httpClient, List.of("fallback-model"), Duration.ofSeconds(40));
 
-        String result = client.generatePlan("健康计划", "只返回 JSON");
+        AgentRunMetricsCollector collector = new AgentRunMetricsCollector();
+        String result = client.generatePlan(
+                "健康计划",
+                "只返回 JSON",
+                AgentRunMetrics.observe(collector)
+                        .withLlmPhase(AgentRunMetrics.LlmPhase.PLANNING));
 
         assertTrue(result.contains("健康计划"));
+        assertEquals(2, collector.snapshot().llmRequestCount());
+        assertEquals(2, collector.snapshot().planningLlmRequestCount());
         ArgumentCaptor<HttpRequest> requests = ArgumentCaptor.forClass(HttpRequest.class);
         verify(httpClient, times(2)).send(requests.capture(), any(HttpResponse.BodyHandler.class));
         assertEquals(List.of("primary-model", "fallback-model"), requestModels(requests.getAllValues()));
@@ -237,9 +246,19 @@ class AgentLlmRuntimeResilienceTest {
         stubHttp(httpClient, errorResponse(503), successResponse("最终健康计划"));
         ZhipuAiClient client = client(httpClient, List.of("fallback-model"), Duration.ofSeconds(40));
 
-        String result = client.synthesize("制定健康计划", "Observation 安全上下文");
+        AgentRunMetricsCollector collector = new AgentRunMetricsCollector();
+        String result = client.synthesize(
+                "制定健康计划",
+                "Observation 安全上下文",
+                AgentRunMetrics.observe(collector)
+                        .withLlmPhase(AgentRunMetrics.LlmPhase.SYNTHESIS));
 
         assertEquals("最终健康计划", result);
+        assertEquals(2, collector.snapshot().llmRequestCount());
+        assertEquals(2, collector.snapshot().synthesisLlmRequestCount());
+        assertEquals(
+                client.synthesisInstructionChars(),
+                collector.snapshot().synthesisInstructionChars());
         ArgumentCaptor<HttpRequest> requests = ArgumentCaptor.forClass(HttpRequest.class);
         verify(httpClient, times(2)).send(requests.capture(), any(HttpResponse.BodyHandler.class));
         List<JsonNode> payloads = requests.getAllValues().stream().map(this::requestJson).toList();
@@ -247,6 +266,7 @@ class AgentLlmRuntimeResilienceTest {
                 payloads.stream().map(node -> node.path("model").asText()).toList());
         assertTrue(payloads.stream().allMatch(node -> node.path("tools").isMissingNode()));
         assertTrue(payloads.stream().allMatch(node -> node.path("tool_choice").isMissingNode()));
+        assertTrue(payloads.stream().allMatch(node -> node.path("max_tokens").asInt() == 2_000));
     }
 
     @Test
@@ -336,7 +356,8 @@ class AgentLlmRuntimeResilienceTest {
                 "1024x1024",
                 "asr-model",
                 Duration.ofSeconds(60),
-                agentTimeout);
+                agentTimeout,
+                2_000);
     }
 
     @SuppressWarnings("unchecked")

@@ -20,8 +20,8 @@ public record AiChatProperties(
         String imageSize,
         String asrModel,
         Duration timeout,
-        Duration agentTimeout) {
-
+        Duration agentTimeout,
+        int agentSynthesisMaxTokens) {
     public URI chatEndpoint() {
         return endpoint(chatApiPath);
     }
@@ -56,6 +56,9 @@ public record AiChatProperties(
         }
         if (agentTimeout == null || agentTimeout.isNegative() || agentTimeout.isZero()) {
             throw new IllegalStateException("ZHIPU_AGENT_TIMEOUT 必须大于 0");
+        }
+        if (agentSynthesisMaxTokens <= 0) {
+            throw new IllegalStateException("ZHIPU_AGENT_SYNTHESIS_MAX_TOKENS 必须大于 0");
         }
     }
 

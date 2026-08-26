@@ -1,12 +1,14 @@
 package com.summercamp.project.agent;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.LocalDate;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -14,8 +16,8 @@ import org.springframework.stereotype.Component;
 
 @Component
 public final class AgentSynthesisContextBuilder {
-    public static final int MAX_OBSERVATION_CHARS = 4_000;
     public static final int MAX_TOTAL_CHARS = 20_000;
+    public static final int MAX_SYNTHESIS_RAG_CHARS = 800;
 
     private static final Set<AgentAction> INCLUDED_ACTIONS = EnumSet.of(
             AgentAction.GET_DATETIME,
@@ -27,17 +29,10 @@ public final class AgentSynthesisContextBuilder {
             AgentAction.CREATE_TODO,
             AgentAction.VALIDATE
     );
-    private static final Pattern SENSITIVE_KEY = Pattern.compile(
-            "(?i).*(api.?key|authorization|password|secret|access.?token|private.?key).*"
-    );
-    private static final Pattern BINARY_KEY = Pattern.compile(
-            "(?i).*(binary|base64|bytes|image|audio|video).*"
-    );
-    private static final Pattern INTERNAL_KEY = Pattern.compile(
-            "(?i)(code|recoverable|status|stack.?trace|debug|exception)"
-    );
     private static final Pattern INLINE_SECRET = Pattern.compile(
-            "(?i)(api.?key|authorization|password|secret|access.?token)\\s*[:=]\\s*[^\\s,;]+"
+            "(?i)[\"']?(api.?key|authorization|password|secret|access.?token|private.?key)"
+                    + "[\"']?\\s*[:=]\\s*(?:[\"'][^\"']*[\"']"
+                    + "|(?:(?:Bearer|Basic)\\s+)?[^\\s,;}]+)"
     );
     private static final Pattern TRAINING_FREQUENCY = Pattern.compile(
             "每周训练\\s*[:：]?\\s*(\\d{1,2})\\s*次"
@@ -68,8 +63,17 @@ public final class AgentSynthesisContextBuilder {
     );
 
     private final GoalRequirementExtractor requirementExtractor = new GoalRequirementExtractor();
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
     public String build(String originalGoal, AgentPlan plan, AgentStateView state) {
+        return buildDetailed(originalGoal, plan, state).context();
+    }
+
+    public BuiltContext buildDetailed(
+            String originalGoal,
+            AgentPlan plan,
+            AgentStateView state
+    ) {
         if (originalGoal == null || originalGoal.isBlank()) {
             throw new IllegalArgumentException("originalGoal must not be blank");
         }
@@ -77,18 +81,19 @@ public final class AgentSynthesisContextBuilder {
             throw new IllegalArgumentException("plan and state must not be null");
         }
 
-        StringBuilder result = new StringBuilder(MAX_TOTAL_CHARS);
         Set<GoalRequirement> requiredDomains = requirementExtractor.extract(originalGoal);
         Set<AgentAction> completedCapabilities = completedCapabilities(plan, state);
         SynthesisConstraints constraints = constraints(originalGoal, plan, state);
-        appendWithinTotal(result, groundingMetadata(
+        List<ContextBlock> blocks = new ArrayList<>();
+        blocks.add(new ContextBlock(BlockType.METADATA, groundingMetadata(
                 requiredDomains,
                 completedCapabilities,
                 weatherScope(plan, state),
                 constraints
-        ));
-        appendWithinTotal(result, "\n用户目标与明确数字约束：" + sanitize(originalGoal)
-                + "\n\n已验证的真实执行结果：\n");
+        ) + "\nFACT_BLOCKS:\n"));
+        blocks.add(new ContextBlock(
+                BlockType.ORIGINAL_GOAL,
+                "ORIGINAL_GOAL:\n" + sanitize(originalGoal) + "\n"));
         for (AgentStep step : plan.steps()) {
             if (!INCLUDED_ACTIONS.contains(step.action())
                     || state.statusOf(step.id()) != AgentStepStatus.COMPLETED) {
@@ -98,13 +103,22 @@ public final class AgentSynthesisContextBuilder {
             if (observation == null || !observation.success()) {
                 continue;
             }
-            String block = observationBlock(step, observation);
-            appendWithinTotal(result, safeTruncate(block, MAX_OBSERVATION_CHARS));
-            if (result.length() >= MAX_TOTAL_CHARS) {
-                break;
-            }
+            blocks.add(observationBlock(step, observation, constraints));
         }
-        return result.toString();
+        StringBuilder result = new StringBuilder();
+        MutableBreakdown breakdown = new MutableBreakdown();
+        for (ContextBlock block : blocks) {
+            if (block.text().isBlank()) {
+                continue;
+            }
+            result.append(block.text());
+            breakdown.add(block.type(), block.text().length());
+        }
+        if (result.length() > MAX_TOTAL_CHARS) {
+            throw new IllegalStateException(
+                    "Grounded synthesis context exceeds hard safety limit");
+        }
+        return new BuiltContext(result.toString(), breakdown.snapshot(result.length()));
     }
 
     private String groundingMetadata(
@@ -125,27 +139,16 @@ public final class AgentSynthesisContextBuilder {
                 .filter(completedCapabilities::contains)
                 .map(Enum::name)
                 .toList());
-        metadata.append("WEATHER_SCOPE:\n")
+        metadata.append("WEATHER_SCOPE=")
                 .append(weatherScope)
                 .append('\n');
         appendConstraintMetadata(metadata, constraints);
         metadata.append("FACT_SOURCE_PRIORITY:\n")
-                .append("WEATHER_FACTS=GET_WEATHER\n")
-                .append("FORMAL_EXERCISE_PLAN=RUN_EXERCISE_SKILL\n")
-                .append("FORMAL_MEAL_PLAN=RUN_MEAL_SKILL\n")
-                .append("CALCULATED_VALUES=CALCULATE\n")
-                .append("[最终汇总强约束]\n")
-                .append("只能把成功 Observation 中存在的数据描述为已查询、已计算或已生成。\n")
-                .append("不得补写 COMPLETED_CAPABILITIES 中不存在的详细 Skill 方案。\n")
-                .append("正式运动和饮食分别以成功 Exercise/Meal Skill Observation 为主要来源；"
-                        + "天气以 GET_WEATHER 为唯一事实来源。只能整理、重排、合并、解释。\n")
-                .append("如果真实天气与运动场地冲突，保留运动内容但按天气事实调整为室内等价方案；"
-                        + "所有章节必须使用同一调整结果。\n")
-                .append("每日安排优先写完整日期（星期），不得只写星期。\n")
-                .append("必须严格遵守用户目标中的训练频率、时长、餐数等数字约束，并确保章节一致。"
-                        + "非训练日活动必须明确标为恢复/日常活动，不计入正式训练。\n")
-                .append("输出前逐项检查日期范围、日期星期对应、正式训练次数与时长、天气运动冲突、"
-                        + "Skill 结果来源、未查询天气范围及跨章节数字一致性。\n");
+                .append("WEATHER=GET_WEATHER\n")
+                .append("EXERCISE=RUN_EXERCISE_SKILL\n")
+                .append("MEAL=RUN_MEAL_SKILL\n")
+                .append("CALCULATION=CALCULATE\n")
+                .append("VALIDATED_FACTS_ONLY=true\n");
         return metadata.toString();
     }
 
@@ -157,7 +160,7 @@ public final class AgentSynthesisContextBuilder {
             metadata.append("PLAN_END_DATE=").append(constraints.planEndDate()).append('\n');
         }
         if (!constraints.dateLabels().isEmpty()) {
-            metadata.append("PLAN_DATE_LABELS:\n");
+            metadata.append("PLAN_DATE_LABELS=\n");
             constraints.dateLabels().forEach(label -> metadata.append(label).append('\n'));
         }
         if (constraints.trainingFrequency() != null) {
@@ -166,9 +169,12 @@ public final class AgentSynthesisContextBuilder {
                     .append('\n');
         }
         if (constraints.trainingDurationMinutes() != null) {
-            metadata.append("TRAINING_DURATION_MINUTES=")
+            metadata.append("TRAINING_SESSION_TOTAL_MINUTES=")
                     .append(constraints.trainingDurationMinutes())
-                    .append('\n');
+                    .append('\n')
+                    .append("TRAINING_SESSION_TOTAL_RULE=热身+主训练+有氧+拉伸合计必须<=")
+                    .append(constraints.trainingDurationMinutes())
+                    .append("分钟。\n");
         }
         if (constraints.weatherObservedThrough() != null) {
             metadata.append("WEATHER_OBSERVED_THROUGH=")
@@ -179,8 +185,8 @@ public final class AgentSynthesisContextBuilder {
             metadata.append("WEATHER_UNQUERIED_FROM=")
                     .append(constraints.weatherUnqueriedFrom())
                     .append('\n')
-                    .append("从 ").append(formatDateLabel(constraints.weatherUnqueriedFrom()))
-                    .append(" 起至计划结束均未获取实时天气，必须明确标注并采用天气无关或室内方案。\n");
+                    .append("WEATHER_UNQUERIED_RULE=从 WEATHER_UNQUERIED_FROM 起，任何具体晴雨、"
+                            + "温度、风力都属于未知，不得生成或推断。\n");
         }
     }
 
@@ -363,50 +369,162 @@ public final class AgentSynthesisContextBuilder {
         return date.getMonthValue() + "月" + date.getDayOfMonth() + "日（" + weekday + "）";
     }
 
-    private String observationBlock(AgentStep step, AgentObservation observation) {
-        if (step.action() == AgentAction.GET_WEATHER) {
-            return weatherObservationBlock(observation);
+    private ContextBlock observationBlock(
+            AgentStep step,
+            AgentObservation observation,
+            SynthesisConstraints constraints
+    ) {
+        return switch (step.action()) {
+            case GET_DATETIME -> new ContextBlock(
+                    BlockType.DATETIME,
+                    compactGenericBlock("DATETIME", observation));
+            case GET_WEATHER -> new ContextBlock(
+                    BlockType.WEATHER,
+                    weatherObservationBlock(observation, constraints));
+            case RETRIEVE_KNOWLEDGE -> new ContextBlock(
+                    BlockType.RAG,
+                    ragObservationBlock(observation));
+            case RUN_EXERCISE_SKILL -> new ContextBlock(
+                    BlockType.EXERCISE,
+                    skillObservationBlock("EXERCISE_SKILL_RESULT", observation));
+            case RUN_MEAL_SKILL -> new ContextBlock(
+                    BlockType.MEAL,
+                    skillObservationBlock("MEAL_SKILL_RESULT", observation));
+            case CALCULATE -> new ContextBlock(
+                    BlockType.CALCULATE,
+                    compactGenericBlock("CALCULATION", observation));
+            case CREATE_TODO -> new ContextBlock(
+                    BlockType.TODO,
+                    compactGenericBlock("TODO", observation));
+            case VALIDATE -> new ContextBlock(BlockType.VALIDATE, "VALIDATE=PASS\n");
+            case SYNTHESIZE -> throw new IllegalArgumentException(
+                    "Synthesis observations cannot be synthesis inputs");
+        };
+    }
+
+    private String weatherObservationBlock(
+            AgentObservation observation,
+            SynthesisConstraints constraints
+    ) {
+        JsonNode result = providerResult(observation.structuredData().get("modelContent"));
+        JsonNode data = result.path("data");
+        String location = firstNonBlank(
+                sanitize(observation.structuredData().get("location")),
+                sanitize(data.path("location").asText()));
+        String period = firstNonBlank(
+                sanitize(observation.structuredData().get("period")),
+                sanitize(data.path("period").asText()));
+        StringBuilder block = new StringBuilder("WEATHER:\n")
+                .append("location=").append(location.isBlank() ? "NOT_AVAILABLE" : location).append('\n')
+                .append("scope=").append(period.isBlank() ? "NOT_AVAILABLE" : period).append('\n');
+        String reportTime = sanitize(data.path("reportTime").asText());
+        if (!reportTime.isBlank()) {
+            block.append("reportTime=").append(reportTime).append('\n');
         }
-        StringBuilder block = new StringBuilder();
-        block.append("- ").append(label(step.action())).append("：")
-                .append(sanitize(observation.summary())).append('\n');
-        observation.structuredData().entrySet().stream()
-                .filter(entry -> isSafeKey(entry.getKey()))
-                .sorted(Map.Entry.comparingByKey())
-                .forEach(entry -> {
-                    String value = sanitize(entry.getValue());
-                    if (!value.isBlank()) {
-                        block.append("  ").append(entry.getKey()).append("：")
-                                .append(value).append('\n');
-                    }
-                });
+        JsonNode current = data.path("current");
+        if (current.isObject()) {
+            block.append("CURRENT: ")
+                    .append(sanitize(current.path("weather").asText()))
+                    .append(", ").append(sanitize(current.path("temperature").asText())).append("℃")
+                    .append(", humidity=").append(sanitize(current.path("humidity").asText())).append('%')
+                    .append(", wind=").append(sanitize(current.path("windDirection").asText()))
+                    .append(sanitize(current.path("windPower").asText())).append("级\n");
+        }
+        JsonNode forecasts = data.path("forecasts");
+        if (forecasts.isArray()) {
+            for (JsonNode day : forecasts) {
+                block.append(sanitize(day.path("date").asText())).append(": day=")
+                        .append(sanitize(day.path("dayWeather").asText())).append(' ')
+                        .append(sanitize(day.path("dayTemperature").asText())).append("℃, night=")
+                        .append(sanitize(day.path("nightWeather").asText())).append(' ')
+                        .append(sanitize(day.path("nightTemperature").asText())).append("℃, wind=")
+                        .append(sanitize(day.path("dayWind").asText()))
+                        .append(sanitize(day.path("dayPower").asText())).append("级\n");
+            }
+        }
+        if (!current.isObject() && !forecasts.isArray()) {
+            String formatted = sanitize(result.path("formatted_text").asText());
+            String fallback = formatted.isBlank()
+                    ? compactProviderResult(observation)
+                    : formatted;
+            if (fallback.isBlank()) {
+                fallback = sanitize(observation.summary());
+            }
+            if (!fallback.isBlank()) {
+                block.append("facts=").append(fallback).append('\n');
+            }
+        }
+        if (constraints.weatherUnqueriedFrom() != null) {
+            block.append("UNQUERIED_FROM=")
+                    .append(constraints.weatherUnqueriedFrom())
+                    .append('\n');
+        }
         return block.toString();
     }
 
-    private String weatherObservationBlock(AgentObservation observation) {
-        String period = sanitize(observation.structuredData().get("period"));
-        String location = sanitize(observation.structuredData().get("location"));
-        String realData = sanitize(observation.structuredData().get("modelContent"));
-        if (realData.isBlank()) {
-            realData = sanitize(observation.summary());
-        }
-        return "[真实天气观测]\n"
-                + "查询地点：" + (location.isBlank() ? "未标明" : location) + "\n"
-                + "查询范围：" + (period.isBlank() ? "NOT_AVAILABLE" : period) + "\n"
-                + "天气事实只覆盖上述查询范围。超出范围的日期没有实时天气数据，"
-                + "不得推断为晴、雨、温度或其他具体天气。\n"
-                + "若真实数据中某日为雨、中雨、大雨、雷阵雨、雪等不适合户外的天气，"
-                + "该日在所有运动章节都必须改为室内步行、自重训练、健身房等室内等价方案；"
-                + "除非明确写成确认无雨后的条件式备选，不得再标为户外。\n"
-                + "以下仅为工具真实返回的数据：\n"
-                + realData + "\n";
+    private String skillObservationBlock(String label, AgentObservation observation) {
+        String reply = sanitize(observation.structuredData().get("reply"));
+        String content = reply.isBlank() ? sanitize(observation.summary()) : reply;
+        return label + ":\n" + content + "\n";
     }
 
-    private boolean isSafeKey(String key) {
-        return key != null
-                && !SENSITIVE_KEY.matcher(key).matches()
-                && !BINARY_KEY.matcher(key).matches()
-                && !INTERNAL_KEY.matcher(key).matches();
+    private String ragObservationBlock(AgentObservation observation) {
+        boolean matched = Boolean.parseBoolean(observation.structuredData().getOrDefault(
+                "matched", "false"));
+        if (!matched) {
+            return "RAG_MATCHED=false\n";
+        }
+        String evidence = sanitize(observation.structuredData().get("promptContext"));
+        String prefix = "RAG_MATCHED=true\nRAG_EVIDENCE:\n";
+        int evidenceBudget = MAX_SYNTHESIS_RAG_CHARS - prefix.length() - 1;
+        return prefix + truncateRagEvidence(evidence, evidenceBudget) + "\n";
+    }
+
+    private String compactGenericBlock(String label, AgentObservation observation) {
+        String content = compactProviderResult(observation);
+        if (content.isBlank()) {
+            content = sanitize(observation.summary());
+        }
+        return label + ":\n" + content + "\n";
+    }
+
+    private String compactProviderResult(AgentObservation observation) {
+        JsonNode result = providerResult(observation.structuredData().get("modelContent"));
+        if (result.isTextual()) {
+            return sanitize(result.asText());
+        }
+        if (!result.isMissingNode() && !result.isNull()) {
+            return sanitize(result.toString());
+        }
+        return "";
+    }
+
+    private JsonNode providerResult(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return objectMapper.missingNode();
+        }
+        try {
+            JsonNode parsed = objectMapper.readTree(raw);
+            if (parsed != null && parsed.path("success").asBoolean(false) && parsed.has("result")) {
+                return parsed.path("result");
+            }
+            return parsed == null ? objectMapper.missingNode() : parsed;
+        } catch (JsonProcessingException exception) {
+            return objectMapper.getNodeFactory().textNode(sanitize(raw));
+        }
+    }
+
+    private String truncateRagEvidence(String evidence, int maximum) {
+        if (evidence.length() <= maximum) {
+            return evidence;
+        }
+        int markerLength = "\n[其余 RAG evidence 已按预算省略]".length();
+        return safeTruncate(evidence, maximum - markerLength)
+                + "\n[其余 RAG evidence 已按预算省略]";
+    }
+
+    private String firstNonBlank(String first, String second) {
+        return first == null || first.isBlank() ? second : first;
     }
 
     private String sanitize(String raw) {
@@ -426,32 +544,11 @@ public final class AgentSynthesisContextBuilder {
             }
             clean.append(stripped);
         }
-        String redacted = INLINE_SECRET.matcher(clean).replaceAll("$1=[REDACTED]");
+        String redacted = INLINE_SECRET.matcher(clean).replaceAll("[REDACTED]");
         if (redacted.startsWith("data:") || redacted.contains(";base64,")) {
             return "[已省略二进制内容]";
         }
         return redacted;
-    }
-
-    private String label(AgentAction action) {
-        return switch (action) {
-            case GET_DATETIME -> "日期时间";
-            case GET_WEATHER -> "天气";
-            case RETRIEVE_KNOWLEDGE -> "本地知识检索";
-            case RUN_EXERCISE_SKILL -> "运动建议";
-            case RUN_MEAL_SKILL -> "饮食建议";
-            case CALCULATE -> "计算结果";
-            case CREATE_TODO -> "待办结果";
-            case VALIDATE -> "一致性校验";
-            case SYNTHESIZE -> "最终汇总";
-        };
-    }
-
-    private void appendWithinTotal(StringBuilder target, String text) {
-        int remaining = MAX_TOTAL_CHARS - target.length();
-        if (remaining > 0) {
-            target.append(safeTruncate(text, remaining));
-        }
     }
 
     private String safeTruncate(String value, int maximum) {
@@ -476,6 +573,108 @@ public final class AgentSynthesisContextBuilder {
     ) {
         private SynthesisConstraints {
             dateLabels = List.copyOf(dateLabels);
+        }
+    }
+
+    public record BuiltContext(String context, Breakdown breakdown) {
+        public BuiltContext {
+            context = context == null ? "" : context;
+            if (breakdown == null || breakdown.totalChars() != context.length()) {
+                throw new IllegalArgumentException("breakdown must explain the complete context");
+            }
+        }
+    }
+
+    public record Breakdown(
+            long metadataChars,
+            long originalGoalChars,
+            long datetimeChars,
+            long weatherChars,
+            long exerciseChars,
+            long mealChars,
+            long ragChars,
+            long todoChars,
+            long validateChars,
+            long calculateChars,
+            long totalChars
+    ) {
+        public long explainedChars() {
+            return metadataChars
+                    + originalGoalChars
+                    + datetimeChars
+                    + weatherChars
+                    + exerciseChars
+                    + mealChars
+                    + ragChars
+                    + todoChars
+                    + validateChars
+                    + calculateChars;
+        }
+    }
+
+    private record ContextBlock(BlockType type, String text) {
+        private ContextBlock {
+            text = text == null ? "" : text;
+        }
+    }
+
+    private enum BlockType {
+        METADATA,
+        ORIGINAL_GOAL,
+        DATETIME,
+        WEATHER,
+        EXERCISE,
+        MEAL,
+        RAG,
+        TODO,
+        VALIDATE,
+        CALCULATE
+    }
+
+    private static final class MutableBreakdown {
+        private long metadata;
+        private long originalGoal;
+        private long datetime;
+        private long weather;
+        private long exercise;
+        private long meal;
+        private long rag;
+        private long todo;
+        private long validate;
+        private long calculate;
+
+        private void add(BlockType type, long chars) {
+            switch (type) {
+                case METADATA -> metadata += chars;
+                case ORIGINAL_GOAL -> originalGoal += chars;
+                case DATETIME -> datetime += chars;
+                case WEATHER -> weather += chars;
+                case EXERCISE -> exercise += chars;
+                case MEAL -> meal += chars;
+                case RAG -> rag += chars;
+                case TODO -> todo += chars;
+                case VALIDATE -> validate += chars;
+                case CALCULATE -> calculate += chars;
+            }
+        }
+
+        private Breakdown snapshot(long total) {
+            Breakdown result = new Breakdown(
+                    metadata,
+                    originalGoal,
+                    datetime,
+                    weather,
+                    exercise,
+                    meal,
+                    rag,
+                    todo,
+                    validate,
+                    calculate,
+                    total);
+            if (result.explainedChars() != total) {
+                throw new IllegalStateException("Synthesis context breakdown is incomplete");
+            }
+            return result;
         }
     }
 }

@@ -45,6 +45,7 @@ public final class RetrieveKnowledgeAgentActionHandler implements AgentActionHan
             );
         }
 
+        context.metrics().recordRagQuery();
         RagContext ragContext = ragRetriever.retrieve(step.inputs().get("query"));
         if (ragContext == null || !ragContext.matched()) {
             return new AgentObservation(

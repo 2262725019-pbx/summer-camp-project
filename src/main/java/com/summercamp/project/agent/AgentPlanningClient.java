@@ -7,4 +7,8 @@ package com.summercamp.project.agent;
 @FunctionalInterface
 public interface AgentPlanningClient {
     String generatePlan(String goal, String instructions);
+
+    default String generatePlan(String goal, String instructions, AgentRunMetrics metrics) {
+        return generatePlan(goal, instructions);
+    }
 }

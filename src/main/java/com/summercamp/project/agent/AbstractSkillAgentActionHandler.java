@@ -2,15 +2,20 @@ package com.summercamp.project.agent;
 
 import com.summercamp.project.skill.BotSkill;
 import com.summercamp.project.skill.SkillContext;
+import com.summercamp.project.skill.SkillExecutionMode;
 import com.summercamp.project.skill.SkillRegistry;
 import com.summercamp.project.skill.SkillResult;
+import com.summercamp.project.skill.SkillTrustedContext;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 abstract class AbstractSkillAgentActionHandler implements AgentActionHandler {
     static final int MAX_SKILL_REQUEST_CHARS = 8_000;
+    private static final Logger LOGGER = LoggerFactory.getLogger(AbstractSkillAgentActionHandler.class);
 
     private final AgentAction action;
     private final String skillName;
@@ -54,12 +59,31 @@ abstract class AbstractSkillAgentActionHandler implements AgentActionHandler {
 
         String request = buildSkillRequest(
                 context.originalGoal(), step.inputs().getOrDefault("request", ""));
-        SkillResult result = availableSkill.orElseThrow().execute(new SkillContext(
-                context.userId(),
-                request,
-                context.history(),
-                context.voiceMessage()
-        ));
+        SkillTrustedContext trustedContext = trustedContext(step, context);
+        context.metrics().recordSkillCall(action);
+        if (trustedContext.weatherObservation().isPresent()) {
+            context.metrics().recordWeatherReuseApplied();
+            LOGGER.info("Agent capability reuse: capability=WEATHER, "
+                    + "consumer=RUN_EXERCISE_SKILL, applied=true");
+        }
+        long skillStartedAt = System.nanoTime();
+        SkillResult result;
+        try {
+            AgentRunMetrics.LlmPhase llmPhase = action == AgentAction.RUN_EXERCISE_SKILL
+                    ? AgentRunMetrics.LlmPhase.EXERCISE_SKILL
+                    : AgentRunMetrics.LlmPhase.SKILL;
+            result = availableSkill.orElseThrow().execute(new SkillContext(
+                    context.userId(),
+                    request,
+                    context.history(),
+                    context.voiceMessage(),
+                    context.metrics().withLlmPhase(llmPhase),
+                    trustedContext,
+                    SkillExecutionMode.AGENT
+            ));
+        } finally {
+            context.metrics().recordSkillDuration(action, System.nanoTime() - skillStartedAt);
+        }
         if (result.status() == SkillResult.Status.WAITING_INPUT) {
             return new AgentObservation(
                     step.id(),
@@ -83,6 +107,13 @@ abstract class AbstractSkillAgentActionHandler implements AgentActionHandler {
                         "reply", result.reply()
                 )
         );
+    }
+
+    protected SkillTrustedContext trustedContext(
+            AgentStep step,
+            AgentExecutionContext context
+    ) {
+        return SkillTrustedContext.empty();
     }
 
     private String buildSkillRequest(String originalGoal, String stepRequest) {

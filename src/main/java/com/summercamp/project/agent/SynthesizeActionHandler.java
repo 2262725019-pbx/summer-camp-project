@@ -48,9 +48,20 @@ public final class SynthesizeActionHandler implements AgentActionHandler {
         }
 
         try {
-            String synthesisContext = contextBuilder.build(
+            AgentSynthesisContextBuilder.BuiltContext builtContext = contextBuilder.buildDetailed(
                     context.originalGoal(), context.plan(), context.state());
-            String answer = synthesisClient.synthesize(context.originalGoal(), synthesisContext);
+            String synthesisContext = builtContext.context();
+            context.metrics().recordSynthesisContext(builtContext.breakdown());
+            String answer;
+            long synthesisStartedAt = System.nanoTime();
+            try {
+                answer = synthesisClient.synthesize(
+                        context.originalGoal(),
+                        synthesisContext,
+                        context.metrics().withLlmPhase(AgentRunMetrics.LlmPhase.SYNTHESIS));
+            } finally {
+                context.metrics().recordSynthesisDuration(System.nanoTime() - synthesisStartedAt);
+            }
             if (answer == null || answer.isBlank()) {
                 return failure(step, "最终汇总服务未返回可用内容");
             }

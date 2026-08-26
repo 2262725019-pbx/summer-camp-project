@@ -1,10 +1,12 @@
 package com.summercamp.project.skill.health;
 
 import com.summercamp.project.llm.ChatOutcome;
+import com.summercamp.project.llm.ChatProviderPolicy;
 import com.summercamp.project.llm.ChatRequest;
 import com.summercamp.project.llm.ChatModelClient;
 import com.summercamp.project.skill.BotSkill;
 import com.summercamp.project.skill.SkillContext;
+import com.summercamp.project.skill.SkillExecutionMode;
 import com.summercamp.project.skill.SkillResult;
 import com.summercamp.project.tool.ToolContext;
 import java.io.IOException;
@@ -12,6 +14,7 @@ import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.stereotype.Component;
 
@@ -56,9 +59,24 @@ public class ExerciseHealthAdviceSkill implements BotSkill {
 
     @Override
     public SkillResult execute(SkillContext context) {
+        String groundingContext = context.trustedContext().weatherObservation()
+                .map(observation -> instructions + "\n\n" + observation.systemGroundingContext())
+                .orElse(instructions);
+        Set<String> disabledTools = context.trustedContext().weatherObservation().isPresent()
+                ? Set.of("get_weather")
+                : Set.of();
         ChatOutcome outcome = chatClient.chat(
-                new ChatRequest(context.history(), context.text(), List.of(), instructions),
-                new ToolContext(context.userId(), context.text(), context.history()));
+                new ChatRequest(
+                        context.history(),
+                        context.text(),
+                        List.of(),
+                        groundingContext,
+                        disabledTools,
+                        context.executionMode() == SkillExecutionMode.AGENT
+                                ? ChatProviderPolicy.AGENT_EXERCISE_SKILL_BOUNDED
+                                : ChatProviderPolicy.STANDARD),
+                new ToolContext(
+                        context.userId(), context.text(), context.history(), context.metrics()));
         String reply = outcome.text().strip();
         if (reply.isBlank()) {
             return SkillResult.waitingInput("暂时没有生成运动建议，请补充你的运动目标和每周可训练时间。");

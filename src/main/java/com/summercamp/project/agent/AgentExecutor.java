@@ -35,6 +35,23 @@ public final class AgentExecutor {
             boolean voiceMessage,
             AgentPlan plan
     ) {
+        return execute(
+                userId,
+                originalGoal,
+                history,
+                voiceMessage,
+                plan,
+                AgentRunMetrics.unobserved());
+    }
+
+    public AgentState execute(
+            String userId,
+            String originalGoal,
+            List<ChatMessage> history,
+            boolean voiceMessage,
+            AgentPlan plan,
+            AgentRunMetrics metrics
+    ) {
         AgentState state = new AgentState(Objects.requireNonNull(plan, "plan must not be null"));
         AgentExecutionContext context = new AgentExecutionContext(
                 userId,
@@ -42,12 +59,13 @@ public final class AgentExecutor {
                 history,
                 voiceMessage,
                 state,
-                plan
+                plan,
+                Objects.requireNonNull(metrics, "metrics must not be null")
         );
         int executedSteps = 0;
 
         while (state.hasPendingSteps()) {
-            skipStepsWithFailedDependencies(plan, state);
+            skipStepsWithFailedDependencies(plan, state, metrics);
             if (!state.hasPendingSteps()) {
                 break;
             }
@@ -69,6 +87,7 @@ public final class AgentExecutor {
                 );
             }
 
+            metrics.recordExecutedStep();
             executeStep(readyStep.orElseThrow(), context);
             executedSteps++;
         }
@@ -82,6 +101,7 @@ public final class AgentExecutor {
         try {
             handler = handlerRegistry.find(step.action());
         } catch (AgentActionHandlerNotFoundException exception) {
+            context.metrics().recordFailedStep();
             LOGGER.warn(AgentRuntimeDiagnostics.stepFailed(
                     step.action(), AgentRuntimeDiagnostics.MISSING_HANDLER, false));
             throw new AgentExecutionException(
@@ -105,8 +125,10 @@ public final class AgentExecutor {
         }
         state.recordObservation(observation);
         if (observation.success()) {
+            context.metrics().recordCompletedStep();
             LOGGER.info(AgentRuntimeDiagnostics.stepCompleted(step.action()));
         } else {
+            context.metrics().recordFailedStep();
             LOGGER.warn(AgentRuntimeDiagnostics.stepFailed(step.action(), observation));
         }
     }
@@ -125,7 +147,11 @@ public final class AgentExecutor {
         return observation;
     }
 
-    private void skipStepsWithFailedDependencies(AgentPlan plan, AgentState state) {
+    private void skipStepsWithFailedDependencies(
+            AgentPlan plan,
+            AgentState state,
+            AgentRunMetrics metrics
+    ) {
         boolean changed;
         do {
             changed = false;
@@ -142,6 +168,7 @@ public final class AgentExecutor {
                                 "Skipped because dependency " + dependencyId
                                         + " ended as " + dependencyStatus.orElseThrow()
                         );
+                        metrics.recordSkippedStep();
                         LOGGER.warn(AgentRuntimeDiagnostics.stepSkipped(step.action()));
                         changed = true;
                         break;

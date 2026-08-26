@@ -71,7 +71,8 @@ public class QuickCalculatorSkill implements BotSkill {
         try {
             ToolResult result = calculatorTool.execute(
                     arguments,
-                    new ToolContext(context.userId(), context.text(), context.history()));
+                    new ToolContext(
+                            context.userId(), context.text(), context.history(), context.metrics()));
             ToolResult.Data data = (ToolResult.Data) result;
             return SkillResult.completed(
                     data.content().path("expression").asText(expression)

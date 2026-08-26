@@ -60,11 +60,18 @@ class AgentOrchestratorTest {
         assertEquals(AgentRunResult.Status.COMPLETED, completedResult.status());
         assertEquals(AgentRunResult.Status.NEEDS_USER_INPUT, waitingResult.status());
         assertEquals(AgentRunResult.Status.FAILED, failedResult.status());
-        assertEquals(List.of(
-                "Agent 执行完成：status=COMPLETED",
-                "Agent 执行结束：status=NEEDS_USER_INPUT",
-                "Agent 执行结束：status=FAILED"
-        ), appender.list.stream().map(ILoggingEvent::getFormattedMessage).toList());
+        List<String> messages = appender.list.stream()
+                .map(ILoggingEvent::getFormattedMessage)
+                .toList();
+        assertTrue(messages.contains("Agent 执行完成：status=COMPLETED"));
+        assertTrue(messages.contains("Agent 执行结束：status=NEEDS_USER_INPUT"));
+        assertTrue(messages.contains("Agent 执行结束：status=FAILED"));
+        assertEquals(3, messages.stream()
+                .filter(message -> message.startsWith("Agent performance: status="))
+                .count());
+        assertTrue(messages.stream()
+                .filter(message -> message.startsWith("Agent performance: status="))
+                .noneMatch(message -> message.contains(plan.goal())));
     }
 
     @Test

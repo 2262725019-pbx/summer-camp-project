@@ -72,7 +72,8 @@ abstract class AbstractToolAgentActionHandler implements AgentActionHandler {
         ToolContext toolContext = new ToolContext(
                 context.userId(),
                 context.originalGoal(),
-                context.history()
+                context.history(),
+                context.metrics()
         );
         ToolRegistry.Invocation invocation = toolRegistry.invoke(toolName, argumentJson, toolContext);
         String content = safeContent(invocation == null ? null : invocation.modelContent());

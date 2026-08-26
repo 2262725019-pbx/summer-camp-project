@@ -51,8 +51,10 @@ public class ToolRegistry {
     /** 执行工具并保留图片、直接完成等富结果，供多步 Function Calling 使用。 */
     public Invocation invoke(String name, String argumentJson, ToolContext context) {
         long startedAt = System.nanoTime();
+        ToolContext invocationContext = context == null ? ToolContext.anonymous() : context;
+        invocationContext.metrics().recordToolCall(name);
         try {
-            ToolResult result = executeTool(name, argumentJson, context);
+            ToolResult result = executeTool(name, argumentJson, invocationContext);
             String content = serialize(successEnvelope(result));
             LOGGER.info("工具执行成功：{}，耗时={}ms", name, elapsedMillis(startedAt));
             return new Invocation(true, result, content);

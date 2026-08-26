@@ -11,9 +11,10 @@ public final class AgentExecutionContext {
     private final boolean voiceMessage;
     private final AgentState state;
     private final AgentPlan plan;
+    private final AgentRunMetrics metrics;
 
     public AgentExecutionContext(String originalGoal, AgentState state, AgentPlan plan) {
-        this("", originalGoal, List.of(), false, state, plan);
+        this("", originalGoal, List.of(), false, state, plan, AgentRunMetrics.unobserved());
     }
 
     public AgentExecutionContext(
@@ -24,6 +25,18 @@ public final class AgentExecutionContext {
             AgentState state,
             AgentPlan plan
     ) {
+        this(userId, originalGoal, history, voiceMessage, state, plan, AgentRunMetrics.unobserved());
+    }
+
+    public AgentExecutionContext(
+            String userId,
+            String originalGoal,
+            List<ChatMessage> history,
+            boolean voiceMessage,
+            AgentState state,
+            AgentPlan plan,
+            AgentRunMetrics metrics
+    ) {
         if (originalGoal == null || originalGoal.isBlank()) {
             throw new IllegalArgumentException("originalGoal must not be blank");
         }
@@ -33,6 +46,7 @@ public final class AgentExecutionContext {
         this.voiceMessage = voiceMessage;
         this.state = Objects.requireNonNull(state, "state must not be null");
         this.plan = Objects.requireNonNull(plan, "plan must not be null");
+        this.metrics = Objects.requireNonNull(metrics, "metrics must not be null");
         if (state.plan() != plan) {
             throw new IllegalArgumentException("state and context must reference the same plan");
         }
@@ -60,6 +74,10 @@ public final class AgentExecutionContext {
 
     public AgentPlan plan() {
         return plan;
+    }
+
+    public AgentRunMetrics metrics() {
+        return metrics;
     }
 
     AgentState mutableState() {
