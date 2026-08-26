@@ -17,8 +17,11 @@ import java.util.Map;
  */
 public final class HealthPlanCalculator {
 
-    /** 大学生普遍以久坐上课为主，统一按"轻度活动"系数估算。 */
-    private static final double ACTIVITY_FACTOR = 1.375;
+    /** 大学生久坐基线的活动系数；随每周训练次数上调。 */
+    private static final double SEDENTARY_ACTIVITY_FACTOR = 1.375;
+
+    /** 每减/增 1kg 体重约需 7700 千卡热量差，按周计算日差值。 */
+    private static final double KCAL_PER_KG = 7_700;
 
     private HealthPlanCalculator() {
     }
@@ -71,16 +74,23 @@ public final class HealthPlanCalculator {
         double bmi = profile.weightKg() / (heightM * heightM);
         double bmr = 10 * profile.weightKg() + 6.25 * profile.heightCm()
                 - 5 * profile.age() + (Boolean.TRUE.equals(profile.male()) ? 5 : -161);
-        double tdee = bmr * ACTIVITY_FACTOR;
+        double tdee = bmr * activityFactor(profile);
 
+        // 每周体重变化按体重的百分比估算（减脂 0.7%、增肌 0.35%），
+        // 再反推每日热量差，保证速率与热量目标自洽。
+        double weeklyRateKg = switch (profile.goal()) {
+            case CUT -> clamp(profile.weightKg() * 0.007, 0.25, 1.0);
+            case BULK -> clamp(profile.weightKg() * 0.0035, 0.15, 0.5);
+            case MAINTAIN -> 0;
+        };
         double targetCalories = switch (profile.goal()) {
-            case CUT -> tdee - clamp(tdee * 0.20, 300, 500);
-            case BULK -> tdee + clamp(tdee * 0.10, 200, 400);
+            case CUT -> tdee - clamp(weeklyRateKg * KCAL_PER_KG / 7.0, 250, tdee * 0.25);
+            case BULK -> tdee + clamp(weeklyRateKg * KCAL_PER_KG / 7.0, 200, tdee * 0.15);
             case MAINTAIN -> tdee;
         };
-        double weeklyRateKg = switch (profile.goal()) {
-            case CUT -> -0.6;
-            case BULK -> 0.3;
+        double signedWeeklyRateKg = switch (profile.goal()) {
+            case CUT -> -weeklyRateKg;
+            case BULK -> weeklyRateKg;
             case MAINTAIN -> 0;
         };
 
@@ -94,7 +104,7 @@ public final class HealthPlanCalculator {
 
         int periodDays = Math.max(1, profile.periodDays());
         double targetWeightKg = profile.weightKg()
-                + (profile.goal() == Goal.MAINTAIN ? 0 : weeklyRateKg * periodDays / 7.0);
+                + signedWeeklyRateKg * periodDays / 7.0;
         return new Metrics(
                 bmi,
                 bmr,
@@ -103,15 +113,29 @@ public final class HealthPlanCalculator {
                 proteinG,
                 carbsG,
                 fatG,
-                weeklyRateKg,
+                signedWeeklyRateKg,
                 targetWeightKg,
                 today.plusDays(periodDays));
     }
 
+    /** 活动系数：0 次（未提供）按久坐 1.375，1-2 次 1.45，3-4 次 1.55，5 次及以上 1.65。 */
+    private static double activityFactor(Profile profile) {
+        int sessions = profile.weeklyTraining() == null ? 0 : profile.weeklyTraining();
+        if (sessions >= 5) {
+            return 1.65;
+        }
+        if (sessions >= 3) {
+            return 1.55;
+        }
+        if (sessions >= 1) {
+            return 1.45;
+        }
+        return SEDENTARY_ACTIVITY_FACTOR;
+    }
+
     /** 按目标热量线性缩放固定模板并做营养修正，返回近似餐单。 */
     public static MealPlan buildMealPlan(Profile profile, Metrics metrics, FoodCatalog foods) {
-        int mealsPerDay = profile.mealsPerDay() == null ? 4 : profile.mealsPerDay();
-        List<PortionTemplate> templates = template(mealsPerDay);
+        List<PortionTemplate> templates = template(profile);
         List<MutablePortion> portions = templates.stream()
                 .map(template -> new MutablePortion(
                         template.mealName(),
@@ -149,7 +173,14 @@ public final class HealthPlanCalculator {
                                    double minimum, double maximum) {
     }
 
-    private static List<PortionTemplate> template(int mealsPerDay) {
+    private static List<PortionTemplate> template(Profile profile) {
+        int mealsPerDay = profile.mealsPerDay() == null ? 4 : profile.mealsPerDay();
+        // 力量/增肌偏好 → 高蛋白加餐与瘦牛肉；耐力偏好 → 训练前后碳水补给
+        boolean strength = profile.goal() == Goal.BULK
+                || hasAny(profile.trainingPreference(), "健身", "力量", "帕梅拉", "hiit");
+        boolean endurance = !strength && hasAny(
+                profile.trainingPreference(),
+                "跑步", "慢跑", "游泳", "篮球", "足球", "羽毛球", "跳绳", "骑行", "单车", "瑜伽", "有氧");
         List<PortionTemplate> templates = new ArrayList<>();
         templates.add(new PortionTemplate("早餐", "oats", 70, 30, 180));
         templates.add(new PortionTemplate("早餐", "milk", 250, 100, 600));
@@ -159,17 +190,27 @@ public final class HealthPlanCalculator {
         templates.add(new PortionTemplate("午餐", "broccoli", 200, 100, 400));
         templates.add(new PortionTemplate("午餐", "olive-oil", 10, 0, 35));
         if (mealsPerDay >= 4) {
-            templates.add(new PortionTemplate("加餐", "yogurt", 200, 100, 500));
-            templates.add(new PortionTemplate("加餐", "whole-wheat-bread", 80, 0, 250));
-            templates.add(new PortionTemplate("加餐", "almond", 15, 0, 60));
+            if (strength) {
+                templates.add(new PortionTemplate("加餐", "yogurt", 200, 100, 400));
+                templates.add(new PortionTemplate("加餐", "whole-wheat-bread", 80, 0, 250));
+                templates.add(new PortionTemplate("加餐", "peanut-butter", 15, 0, 40));
+            } else if (endurance) {
+                templates.add(new PortionTemplate("加餐", "banana", 100, 0, 250));
+                templates.add(new PortionTemplate("加餐", "sweet-potato", 150, 0, 300));
+                templates.add(new PortionTemplate("加餐", "almond", 10, 0, 40));
+            } else {
+                templates.add(new PortionTemplate("加餐", "yogurt", 200, 100, 500));
+                templates.add(new PortionTemplate("加餐", "whole-wheat-bread", 80, 0, 250));
+                templates.add(new PortionTemplate("加餐", "almond", 15, 0, 60));
+            }
         }
         if (mealsPerDay >= 5) {
             templates.add(new PortionTemplate("晚餐", "rice", 220, 80, 650));
-            templates.add(new PortionTemplate("晚餐", "lean-beef", 150, 80, 350));
+            templates.add(new PortionTemplate("晚餐", strength ? "lean-beef" : "chicken", 150, 80, 350));
             templates.add(new PortionTemplate("晚餐", "spinach", 200, 100, 400));
         } else {
             templates.add(new PortionTemplate("晚餐", "rice", 220, 80, 650));
-            templates.add(new PortionTemplate("晚餐", "chicken", 150, 80, 350));
+            templates.add(new PortionTemplate("晚餐", strength ? "lean-beef" : "chicken", 150, 80, 350));
             templates.add(new PortionTemplate("晚餐", "spinach", 200, 100, 400));
             templates.add(new PortionTemplate("晚餐", "olive-oil", 10, 0, 35));
         }
@@ -210,6 +251,13 @@ public final class HealthPlanCalculator {
 
     private static double clamp(double value, double minimum, double maximum) {
         return Math.max(minimum, Math.min(maximum, value));
+    }
+
+    private static boolean hasAny(String preference, String... words) {
+        if (preference == null) {
+            return false;
+        }
+        return List.of(words).contains(preference);
     }
 
     private static long roundToFive(double value) {

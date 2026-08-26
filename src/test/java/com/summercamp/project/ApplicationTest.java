@@ -69,6 +69,7 @@ class ApplicationTest {
     void shouldRegisterAllBotTools() {
         assertEquals(
                 List.of(
+                        "add_reminder",
                         "add_todo",
                         "calculate",
                         "clear_memory",

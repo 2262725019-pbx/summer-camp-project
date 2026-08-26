@@ -80,6 +80,27 @@ class HealthProfileParserTest {
     }
 
     @Test
+    void shouldConvertMeterHeightsToCentimeters() {
+        assertEquals(175.0, HealthProfileParser.parse("身高 1.75 米，体重 70kg").profile().heightCm());
+        assertEquals(175.0, HealthProfileParser.parse("我 1米75 想减脂").profile().heightCm());
+        assertEquals(180.0, HealthProfileParser.parse("身高 1米8 想增肌").profile().heightCm());
+        assertEquals(175.0, HealthProfileParser.parse("身高 1.75m，体重 70kg").profile().heightCm());
+        assertEquals(175.0, HealthProfileParser.parse("身高 1.75，体重 70kg").profile().heightCm());
+        // 非身高语境不被误伤
+        assertNull(HealthProfileParser.parse("我跑了 5 米就累了").profile().heightCm());
+    }
+
+    @Test
+    void shouldExtractWeeklyTrainingSessions() {
+        assertEquals(3, HealthProfileParser.parse("每周练3次").profile().weeklyTraining());
+        assertEquals(4, HealthProfileParser.parse("一周锻炼4次").profile().weeklyTraining());
+        assertEquals(5, HealthProfileParser.parse("每星期5次").profile().weeklyTraining());
+        assertNull(HealthProfileParser.parse("想一个月减 8 斤").profile().weeklyTraining());
+        // 不把"两周"误判为训练频率
+        assertNull(HealthProfileParser.parse("想两周减 8 斤").profile().weeklyTraining());
+    }
+
+    @Test
     void shouldExtractCityWithOrWithoutSuffix() {
         assertEquals("江西省宜春市", HealthProfileParser.parse("我在江西省宜春市").profile().city());
         assertEquals("北京", HealthProfileParser.parse("我在北京上学").profile().city());

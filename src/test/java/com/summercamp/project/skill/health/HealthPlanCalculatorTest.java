@@ -68,7 +68,53 @@ class HealthPlanCalculatorTest {
         assertTrue(mealPlan.totals().fat() > 0);
     }
 
+    @Test
+    void shouldAdjustActivityFactorByWeeklyTrainingSessions() {
+        Profile sedentary = profile(Goal.CUT);
+        Profile moderate = new Profile(Goal.CUT, true, 20, 175.0, 70.0, 30, null, null, null, 4, 3);
+        Profile active = new Profile(Goal.CUT, true, 20, 175.0, 70.0, 30, null, null, null, 4, 6);
+
+        Metrics baseline = HealthPlanCalculator.calculate(sedentary, LocalDate.of(2026, 8, 25));
+        assertEquals(1698.75 * 1.375, baseline.tdee(), 0.01);
+        Metrics medium = HealthPlanCalculator.calculate(moderate, LocalDate.of(2026, 8, 25));
+        assertEquals(1698.75 * 1.55, medium.tdee(), 0.01);
+        Metrics high = HealthPlanCalculator.calculate(active, LocalDate.of(2026, 8, 25));
+        assertEquals(1698.75 * 1.65, high.tdee(), 0.01);
+    }
+
+    @Test
+    void shouldScaleWeightLossRateByBodyWeight() {
+        Profile light = new Profile(Goal.CUT, true, 20, 175.0, 45.0, 30, null, null, null, 4, null);
+        Profile heavy = new Profile(Goal.CUT, true, 20, 175.0, 100.0, 30, null, null, null, 4, null);
+        Profile veryHeavy = new Profile(Goal.CUT, true, 20, 175.0, 150.0, 30, null, null, null, 4, null);
+
+        assertEquals(-0.315, HealthPlanCalculator.calculate(light, LocalDate.now()).weeklyRateKg(), 0.001);
+        assertEquals(-0.7, HealthPlanCalculator.calculate(heavy, LocalDate.now()).weeklyRateKg(), 0.001);
+        // 大基数按百分比超过 1kg/周，应被钳制到安全上限
+        assertEquals(-1.0, HealthPlanCalculator.calculate(veryHeavy, LocalDate.now()).weeklyRateKg(), 0.001);
+    }
+
+    @Test
+    void shouldTailorSnackByTrainingPreference() {
+        Profile strength = new Profile(Goal.CUT, true, 20, 175.0, 70.0, 30, null, null, "健身", 4, null);
+        Profile endurance = new Profile(Goal.CUT, true, 20, 175.0, 70.0, 30, null, null, "跑步", 4, null);
+
+        Metrics metrics = HealthPlanCalculator.calculate(strength, LocalDate.of(2026, 8, 25));
+        MealPlan strengthPlan = HealthPlanCalculator.buildMealPlan(strength, metrics, foods);
+        MealPlan endurancePlan = HealthPlanCalculator.buildMealPlan(endurance, metrics, foods);
+
+        assertTrue(containsFood(strengthPlan, "花生酱"));
+        assertTrue(containsFood(endurancePlan, "香蕉"));
+        assertFalse(containsFood(endurancePlan, "花生酱"));
+    }
+
+    private boolean containsFood(MealPlan mealPlan, String foodName) {
+        return mealPlan.meals().stream()
+                .flatMap(meal -> meal.portions().stream())
+                .anyMatch(portion -> portion.foodName().equals(foodName));
+    }
+
     private Profile profile(Goal goal) {
-        return new Profile(goal, true, 20, 175.0, 70.0, 30, null, null, null, 4);
+        return new Profile(goal, true, 20, 175.0, 70.0, 30, null, null, null, 4, null);
     }
 }

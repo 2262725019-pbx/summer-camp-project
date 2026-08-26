@@ -12,15 +12,26 @@ import com.summercamp.project.llm.ChatRequest;
 import com.summercamp.project.llm.LlmException;
 import com.summercamp.project.rag.KeywordRagRetriever;
 import com.summercamp.project.rag.RagRetriever;
+import com.summercamp.project.schedule.ReminderSubscriptionManager;
 import com.summercamp.project.skill.SkillContext;
 import com.summercamp.project.skill.SkillResult;
 import com.summercamp.project.skill.nutrition.FoodCatalog;
 import com.summercamp.project.tool.TodoService;
+import com.summercamp.project.weather.CurrentWeather;
+import com.summercamp.project.weather.WeatherClient;
+import com.summercamp.project.weather.WeatherLocationNotFoundException;
+import com.summercamp.project.weather.WeatherPeriod;
+import com.summercamp.project.weather.WeatherReport;
+import java.nio.file.Path;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 class HealthLifePlanSkillTest {
+
+    @TempDir
+    Path tempDir;
 
     @Test
     void shouldMatchHealthPlanIntentButNotOtherSkills() {
@@ -132,7 +143,9 @@ class HealthLifePlanSkillTest {
                 (request, context) -> ChatOutcome.text("方案"),
                 rag(),
                 new FoodCatalog(new ObjectMapper()),
-                todos);
+                todos,
+                weather(),
+                subscriptions());
 
         skill.execute(context("性别：男 身高：175cm 体重：70kg 想减脂"));
 
@@ -150,7 +163,9 @@ class HealthLifePlanSkillTest {
                 },
                 rag(),
                 new FoodCatalog(new ObjectMapper()),
-                new TodoService());
+                new TodoService(),
+                weather(),
+                subscriptions());
 
         skill.execute(context("性别：男 身高：175cm 体重：70kg 想减脂"));
 
@@ -159,8 +174,72 @@ class HealthLifePlanSkillTest {
         assertTrue(grounding.contains("参考餐单"));
     }
 
+    @Test
+    void shouldInjectWeatherIntoGroundingWhenCityProvided() {
+        AtomicReference<ChatRequest> captured = new AtomicReference<>();
+        HealthLifePlanSkill skill = new HealthLifePlanSkill(
+                (request, context) -> {
+                    captured.set(request);
+                    return ChatOutcome.text("方案");
+                },
+                rag(),
+                new FoodCatalog(new ObjectMapper()),
+                new TodoService(),
+                weather(),
+                subscriptions());
+
+        skill.execute(context("性别：男 身高：175cm 体重：70kg 想减脂，我在北京"));
+
+        String grounding = captured.get().groundingContext();
+        assertTrue(grounding.contains("近期天气"));
+        assertTrue(grounding.contains("小雨"));
+    }
+
+    @Test
+    void shouldContinueWhenWeatherQueryFails() {
+        HealthLifePlanSkill skill = new HealthLifePlanSkill(
+                (request, context) -> ChatOutcome.text("""
+                        一、目标与身体指标
+                        BMI 22.9，每日消耗 2336 千卡，建议摄入 1869 千卡，蛋白质 126g
+                        二、参考餐单
+                        早餐：燕麦片 55g、全脂牛奶 195g、鸡蛋 80g
+                        三、运动方案
+                        每周 3 次有氧加 2 次力量训练。
+                        四、作息与执行
+                        每晚睡眠 7～9 小时。
+                        五、安全提醒
+                        本计划为一般性估算，不替代医疗或个体化营养建议。
+                        """),
+                rag(),
+                new FoodCatalog(new ObjectMapper()),
+                new TodoService(),
+                (location, period) -> {
+                    throw new WeatherLocationNotFoundException(location);
+                },
+                subscriptions());
+
+        SkillResult result = skill.execute(context("性别：男 身高：175cm 体重：70kg 想减脂，我在北京"));
+
+        assertEquals(SkillResult.Status.COMPLETED, result.status());
+        assertTrue(result.reply().contains("参考餐单"));
+    }
+
     private HealthLifePlanSkill skill(ChatModelClient chat) {
-        return new HealthLifePlanSkill(chat, rag(), new FoodCatalog(new ObjectMapper()), new TodoService());
+        return new HealthLifePlanSkill(
+                chat, rag(), new FoodCatalog(new ObjectMapper()), new TodoService(), weather(), subscriptions());
+    }
+
+    private ReminderSubscriptionManager subscriptions() {
+        return new ReminderSubscriptionManager(new ObjectMapper(), tempDir.resolve("subs.json").toString());
+    }
+
+    private WeatherClient weather() {
+        return (location, period) -> new WeatherReport(
+                location,
+                "2026-08-26 08:00",
+                period,
+                new CurrentWeather("小雨", "24", "80%", "东南", "3"),
+                List.of());
     }
 
     private RagRetriever rag() {

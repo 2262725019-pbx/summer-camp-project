@@ -14,17 +14,23 @@ import com.summercamp.project.skill.health.HealthPlanCalculator.Portion;
 import com.summercamp.project.skill.health.HealthProfileParser.ParseResult;
 import com.summercamp.project.skill.health.HealthProfileParser.Profile;
 import com.summercamp.project.skill.nutrition.FoodCatalog;
+import com.summercamp.project.schedule.ReminderSubscriptionManager;
 import com.summercamp.project.tool.TodoService;
 import com.summercamp.project.tool.ToolContext;
+import com.summercamp.project.weather.WeatherClient;
+import com.summercamp.project.weather.WeatherPeriod;
+import com.summercamp.project.weather.WeatherReport;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
-import java.util.Set;
+import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.regex.Pattern;
 import org.slf4j.Logger;
@@ -52,12 +58,14 @@ public class HealthLifePlanSkill implements BotSkill {
             身高：175cm
             体重：70kg
 
-            也可顺带说明：目标周期（如“一个月”）、所在城市、喜欢的运动、每天几餐。
+            也可顺带说明：目标周期（如“一个月”）、所在城市、喜欢的运动、每周训练次数（如“每周3次”）、每天几餐。
             若不方便提供，回复“直接生成”，我会使用大学生常见默认值估算。
             """;
     private static final String SAFETY_NOTICE = "本计划为一般性估算，不替代医疗或个体化营养建议。";
     private static final int MAX_PLAN_ATTEMPTS = 2;
     private static final int MIN_PLAN_CHARACTERS = 150;
+    /** 追问标记的存活时长，与路由层 PendingSkillStore 的 5 分钟续接窗口对齐。 */
+    private static final Duration ASK_RETRY_TTL = Duration.ofMinutes(5);
     /** 模型反问用户资料的特征，说明它没有按指令直接生成。 */
     private static final List<String> ASKING_FEATURES = List.of(
             "你的性别", "你的年龄", "请告诉我你的", "先确认一个信息", "能否提供", "请问你的",
@@ -95,18 +103,25 @@ public class HealthLifePlanSkill implements BotSkill {
     private final RagRetriever ragRetriever;
     private final FoodCatalog foods;
     private final TodoService todoService;
-    private final Set<String> askedUsers = ConcurrentHashMap.newKeySet();
+    private final WeatherClient weatherClient;
+    private final ReminderSubscriptionManager subscriptions;
+    /** 每个用户最近一次追问的时间，TTL 内不重复追问；到期后允许重新补充资料。 */
+    private final Map<String, Instant> askedAt = new ConcurrentHashMap<>();
     private final String instructions;
 
     public HealthLifePlanSkill(
             ChatModelClient chatClient,
             RagRetriever ragRetriever,
             FoodCatalog foods,
-            TodoService todoService) {
+            TodoService todoService,
+            WeatherClient weatherClient,
+            ReminderSubscriptionManager subscriptions) {
         this.chatClient = chatClient;
         this.ragRetriever = ragRetriever;
         this.foods = foods;
         this.todoService = todoService;
+        this.weatherClient = weatherClient;
+        this.subscriptions = subscriptions;
         this.instructions = loadInstructions();
     }
 
@@ -149,7 +164,7 @@ public class HealthLifePlanSkill implements BotSkill {
         }
 
         ParseResult parsed = HealthProfileParser.parse(text);
-        if (!parsed.missingCritical().isEmpty() && askedUsers.add(context.userId())) {
+        if (!parsed.missingCritical().isEmpty() && shouldAskOnce(context.userId())) {
             return SkillResult.waitingInput(FOLLOW_UP_TEMPLATE);
         }
 
@@ -159,6 +174,10 @@ public class HealthLifePlanSkill implements BotSkill {
 
         List<String> assumed = assumedFields(parsed.profile());
         String facts = summarize(profile, metrics, mealPlan);
+        String weather = queryWeather(profile.city());
+        if (!weather.isBlank()) {
+            facts += "\n\n【近期天气】\n" + weather;
+        }
         String ragContext = ragRetriever.retrieve(text).promptContext();
         String plan = generatePlan(context, facts, ragContext, metrics, profile, mealPlan, assumed);
 
@@ -166,7 +185,17 @@ public class HealthLifePlanSkill implements BotSkill {
         if (addedTodos > 0) {
             plan += "\n\n已将 " + addedTodos + " 条关键行动加入你的待办（可用“查看我的待办”查看）。";
         }
-        return SkillResult.completed(plan);
+        subscriptions.subscribeHealth(
+                context.userId(),
+                profile.goal().chineseName(),
+                Math.toIntExact(metrics.caloriesRounded()));
+        StringBuilder notice = new StringBuilder("\n\n已为你开启健康提醒订阅（每天 21:00）");
+        if (profile.city() != null) {
+            subscriptions.subscribeWeather(context.userId(), profile.city());
+            notice.append("，以及 ").append(profile.city()).append(" 天气播报（每天 07:30）");
+        }
+        notice.append("。发送“退订提醒”或“退订天气”可取消。");
+        return SkillResult.completed(plan + notice);
     }
 
     /**
@@ -253,6 +282,9 @@ public class HealthLifePlanSkill implements BotSkill {
         builder.append("BMI：").append(oneDecimal(metrics.bmi())).append('\n');
         builder.append("基础代谢：约 ").append(Math.round(metrics.bmr())).append(" 千卡/天\n");
         builder.append("每日消耗估算：").append(Math.round(metrics.tdee())).append(" 千卡\n");
+        if (profile.weeklyTraining() != null && profile.weeklyTraining() > 0) {
+            builder.append("每周训练：").append(profile.weeklyTraining()).append(" 次（用于估算每日消耗）\n");
+        }
         builder.append("建议摄入热量：").append(metrics.caloriesRounded()).append(" 千卡\n");
         builder.append("营养目标：蛋白质 ").append(metrics.proteinRounded())
                 .append("g、碳水 ").append(metrics.carbsRounded())
@@ -274,6 +306,37 @@ public class HealthLifePlanSkill implements BotSkill {
                 .append(oneDecimal(mealPlan.totals().carbs())).append("g、脂肪 ")
                 .append(oneDecimal(mealPlan.totals().fat())).append('g');
         return builder.toString();
+    }
+
+    /**
+     * TTL 窗口内每个用户最多追问一次；到期后允许再次追问（与 pending 续接窗口一致），
+     * 避免"已问过"被永久记住导致用户想补充资料时被静默使用默认值。
+     */
+    private boolean shouldAskOnce(String userId) {
+        if (userId == null || userId.isBlank()) {
+            return false;
+        }
+        Instant now = Instant.now();
+        askedAt.entrySet().removeIf(entry -> entry.getValue().plus(ASK_RETRY_TTL).isBefore(now));
+        if (askedAt.containsKey(userId)) {
+            return false;
+        }
+        askedAt.put(userId, now);
+        return true;
+    }
+
+    /** Java 层预查城市近期天气并拼成文本；失败不阻断主流程，由模型按数据实写或省略。 */
+    private String queryWeather(String city) {
+        if (city == null || city.isBlank()) {
+            return "";
+        }
+        try {
+            WeatherReport report = weatherClient.query(city, WeatherPeriod.THREE_DAYS);
+            return report.formatChinese();
+        } catch (RuntimeException exception) {
+            LOGGER.warn("健康规划天气查询失败（{}）：{}", city, exception.getMessage());
+            return "";
+        }
     }
 
     /** 本地确定性兜底：即使大模型完全不可用，也输出完整五章规划书。 */
@@ -353,7 +416,8 @@ public class HealthLifePlanSkill implements BotSkill {
                 raw.weightDeltaKg(),
                 raw.city(),
                 raw.trainingPreference(),
-                raw.mealsPerDay() == null ? 4 : raw.mealsPerDay());
+                raw.mealsPerDay() == null ? 4 : raw.mealsPerDay(),
+                raw.weeklyTraining() == null ? 0 : raw.weeklyTraining());
     }
 
     private List<String> assumedFields(Profile raw) {
@@ -372,6 +436,9 @@ public class HealthLifePlanSkill implements BotSkill {
         }
         if (raw.mealsPerDay() == null) {
             assumed.add("餐数");
+        }
+        if (raw.weeklyTraining() == null) {
+            assumed.add("每周训练次数");
         }
         return assumed;
     }

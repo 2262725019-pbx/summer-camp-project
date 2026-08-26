@@ -17,6 +17,8 @@ public final class HealthProfileParser {
     private static final Pattern SEX_WORD = Pattern.compile("[男女]");
     private static final Pattern AGE = Pattern.compile("年龄\\s*[：:=]?\\s*(\\d{1,3})|(\\d{1,2})\\s*岁");
     private static final Pattern HEIGHT = Pattern.compile("身高\\s*[：:=]?\\s*(\\d+(?:\\.\\d+)?)|(\\d{3})\\s*(?:cm|厘米)");
+    private static final Pattern HEIGHT_METERS_CN = Pattern.compile("(\\d+(?:\\.\\d+)?)\\s*米\\s*(?:(\\d{1,2}))?");
+    private static final Pattern HEIGHT_METERS_LATIN = Pattern.compile("(\\d+\\.\\d+)\\s*m\\b");
     private static final Pattern WEIGHT = Pattern.compile("体重\\s*[：:=]?\\s*(\\d+(?:\\.\\d+)?)|(\\d+(?:\\.\\d+)?)\\s*(?:kg|公斤|千克)");
     private static final Pattern PERIOD_DAYS = Pattern.compile("(\\d+)\\s*天");
     private static final Pattern PERIOD_WEEKS = Pattern.compile("(\\d+)\\s*(?:周|星期)");
@@ -32,6 +34,8 @@ public final class HealthProfileParser {
                     + "郑州|长沙|南昌|宜春|长春|沈阳|青岛|大连|厦门|福州|济南|合肥|昆明|贵阳|南宁|太原|"
                     + "石家庄|哈尔滨|乌鲁木齐|兰州|银川|西宁|拉萨|海口|三亚|呼和浩特|香港|澳门)");
     private static final Pattern MEALS = Pattern.compile("(\\d+)\\s*餐");
+    private static final Pattern WEEKLY_TRAINING = Pattern.compile(
+            "(?:每周|一周|每星期|一星期)\\s*(?:练|锻炼|运动)?\\s*(\\d{1,2})\\s*次");
 
     private static final List<String> BULK_TERMS = List.of("增肌", "长肌肉", "练肌肉", "增重", "增壮");
     private static final List<String> CUT_TERMS = List.of("减脂", "减肥", "减重", "瘦身", "掉秤", "瘦下来", "减掉", "降体重", "减斤");
@@ -70,7 +74,8 @@ public final class HealthProfileParser {
             Double weightDeltaKg,
             String city,
             String trainingPreference,
-            Integer mealsPerDay) {
+            Integer mealsPerDay,
+            Integer weeklyTraining) {
     }
 
     public record ParseResult(Profile profile, List<String> missingCritical) {
@@ -106,7 +111,8 @@ public final class HealthProfileParser {
                 findWeightDelta(value),
                 findCity(value),
                 findTrainingPreference(value),
-                findMeals(value));
+                findMeals(value),
+                findWeeklyTraining(value));
         return new ParseResult(profile, missing);
     }
 
@@ -129,10 +135,35 @@ public final class HealthProfileParser {
     }
 
     private static Optional<Double> findHeight(String value) {
+        // 米制优先："1米75"、"1.75米"，范围校验避免误伤（如"跑了 5 米"）
+        Matcher metersCn = HEIGHT_METERS_CN.matcher(value);
+        if (metersCn.find()) {
+            double major = Double.parseDouble(metersCn.group(1));
+            double cm;
+            if (metersCn.group(2) != null) {
+                int minor = Integer.parseInt(metersCn.group(2));
+                cm = Math.floor(major) * 100 + (minor < 10 ? minor * 10 : minor);
+            } else {
+                cm = major * 100;
+            }
+            if (cm >= 50 && cm <= 250) {
+                return Optional.of(cm);
+            }
+        }
+        // 拉丁米制："1.75m"（要求带小数，避免把"170m"之类的距离误当身高）
+        Matcher metersLatin = HEIGHT_METERS_LATIN.matcher(value);
+        if (metersLatin.find()) {
+            return Optional.of(Double.parseDouble(metersLatin.group(1)) * 100);
+        }
+        // 厘米或带标签数字："175cm"、"身高 175"；带"身高"标签的个位数数值按"米"理解（如"身高 1.75"）
         Matcher matcher = HEIGHT.matcher(value);
         if (matcher.find()) {
             String height = matcher.group(1) != null ? matcher.group(1) : matcher.group(2);
-            return Optional.of(Double.parseDouble(height));
+            double parsed = Double.parseDouble(height);
+            if (matcher.group(1) != null && parsed < 10) {
+                return Optional.of(parsed * 100);
+            }
+            return Optional.of(parsed);
         }
         return Optional.empty();
     }
@@ -240,6 +271,11 @@ public final class HealthProfileParser {
 
     private static Integer findMeals(String value) {
         Matcher matcher = MEALS.matcher(value);
+        return matcher.find() ? Integer.parseInt(matcher.group(1)) : null;
+    }
+
+    private static Integer findWeeklyTraining(String value) {
+        Matcher matcher = WEEKLY_TRAINING.matcher(value);
         return matcher.find() ? Integer.parseInt(matcher.group(1)) : null;
     }
 
