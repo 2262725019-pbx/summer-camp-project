@@ -74,15 +74,18 @@ public class KeywordRagRetriever implements RagRetriever {
 
     private String buildPromptContext(List<RagContext.Hit> hits) {
         StringBuilder context = new StringBuilder(CONTEXT_HEADER.strip());
+        int count = 0;
         for (RagContext.Hit hit : hits) {
+            if (count >= 2) break; // 最多2条
             String section = "\n\n[资料 " + hit.document().id() + "] "
-                    + hit.document().title() + "\n" + hit.document().content().strip();
+                + hit.document().title() + "\n" + hit.document().content().strip();
             int remaining = properties.maxContextChars() - context.length();
             if (remaining <= 0) {
                 break;
             }
             if (section.length() <= remaining) {
                 context.append(section);
+                count++;
             } else {
                 context.append(section, 0, remaining);
                 break;

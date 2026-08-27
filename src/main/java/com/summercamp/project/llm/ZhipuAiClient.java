@@ -43,6 +43,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
+
 /** 智谱开放平台客户端，负责对话、多模态、意图分类和语音能力。 */
 @Component
 public class ZhipuAiClient implements
@@ -52,28 +53,43 @@ public class ZhipuAiClient implements
         SpeechToTextClient {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(ZhipuAiClient.class);
-    private static final String SYSTEM_INSTRUCTIONS = """
-            你是一个运行在微信中的中文 AI 助手。请准确、友好、简洁地回答。
-            当用户发送图片时，请结合图片内容和文字问题回答；不确定时明确说明。
-            只有当前请求确实包含图片数据时，才可以声称看到了图片。
-            历史消息中的“用户发送了图片”只是占位说明，不包含图片内容；需要时请让用户重新发送图片。
-            应用会在用户发送语音时把你的回答合成为微信语音，因此不要声称自己只能发送文字或不能语音回复。
-            涉及真实天气、温度、降雨或带伞问题时必须调用 get_weather，不得凭记忆编造天气。
-            用户要求进行明确数值计算时调用 calculate，不要自行心算替代工具。
-            用户问当前日期、时间或星期时调用 get_current_datetime。
-            待办事项依次使用 add_todo、list_todos、complete_todo，并保持当前微信用户的数据隔离。
-            用户要求清除上下文时调用 clear_memory；要求二维码时调用 generate_qr_code。
-            用户要求把计算结果生成二维码时，必须依次调用 calculate、create_result_page，
-            再把 create_result_page 返回的 url 作为 text 调用 generate_qr_code；不要直接把数值写入二维码。
-            generate_image 和 generate_qr_code 会产生真实图片，不要声称图片无法发送。
-            复杂任务可以连续调用多个工具，后一步可以依据前一步的工具结果继续执行。
-            工具返回 success=false 时，简洁说明失败原因；天气工具成功时必须保持数值和发布时间准确。
-            不要声称执行了实际上没有执行的操作。
-            用户提出健康生活规划需求（如减重、增肌、改善作息）时，应调用 create_health_plan 工具，
-            并尽量从用户消息中提取参数（身高、体重、年龄、性别、每周运动次数、每次时长、所在城市）。
-            如果缺少必要参数，可先询问用户补齐，或使用默认值继续。
-            """;
-    private static final int MAX_ATTEMPTS = 2;
+    private static final ExecutorService VIRTUAL_THREAD_POOL = Executors.newVirtualThreadPerTaskExecutor();
+    private final ToolExecutionStateStore executionStateStore;
+    private static final String SYSTEM_INSTRUCTIONS_BASIC = """
+        你是一个运行在微信中的中文 AI 助手。请准确、友好、简洁地回答。
+        当用户发送图片时，请结合图片内容和文字问题回答；不确定时明确说明。
+        历史消息中的“用户发送了图片”只是占位说明，不包含图片内容；需要时请让用户重新发送图片。
+        应用会在用户发送语音时把你的回答合成为微信语音，因此不要声称自己只能发送文字或不能语音回复。
+        涉及真实天气、温度、降雨或带伞问题时必须调用 get_weather，不得凭记忆编造天气。
+        用户要求进行明确数值计算时调用 calculate，不要自行心算替代工具。
+        用户问当前日期、时间或星期时调用 get_current_datetime。
+        待办事项依次使用 add_todo、list_todos、complete_todo，并保持当前微信用户的数据隔离。
+        用户要求清除上下文时调用 clear_memory；要求二维码时调用 generate_qr_code。
+        用户要求把计算结果生成二维码时，必须依次调用 calculate、create_result_page，
+        再把 create_result_page 返回的 url 作为 text 调用 generate_qr_code；不要直接把数值写入二维码。
+        generate_image 和 generate_qr_code 会产生真实图片，不要声称图片无法发送。
+        复杂任务可以连续调用多个工具，后一步可以依据前一步的工具结果继续执行。
+        工具返回 success=false 时，简洁说明失败原因；天气工具成功时必须保持数值和发布时间准确。
+        不要声称执行了实际上没有执行的操作。
+        如果需要调用工具，必须直接发起工具调用，不要在你的回复文本中提到工具名称或说“我将使用某工具”。
+        生成运动计划时，运动天数必须与用户提供的“每周训练次数”完全一致。如果用户说4次，则只安排4天运动，其余为休息日。
+        """;
+
+    private static final String SYSTEM_INSTRUCTIONS_WITH_PLANNING = SYSTEM_INSTRUCTIONS_BASIC + """
+
+        当用户提出健康生活规划需求（如减重、增肌、改善作息、整体健康计划）时，你应该：
+        1. 先判断是否缺少必要信息（身高、体重、年龄、性别、运动频率、所在城市等）；如缺少，可先询问用户补充，或使用合理默认值并在回答中说明。
+        2. 制定执行计划，按需调用以下工具：
+           - get_weather：如果用户提供了城市，调用获取天气，用于调整运动建议。
+           - generate_meal_plan：需要提供全部参数（性别、年龄、身高、体重、日常活动、每周训练次数、每次时长、每日餐数）；若用户未提供，可请求补充或使用典型默认值。
+           - generate_exercise_plan：至少提供运动目标（goal），可附带城市和补充信息。
+           - search_knowledge：检索健康相关知识作为计划补充。
+        3. 收集所有工具返回结果后，综合整理成一份结构清晰的完整健康生活规划报告，包含饮食、运动、作息、天气调整和注意事项等部分。
+        4. 最终报告以 Markdown 格式输出，标题清晰，内容具体可执行。
+        如果需要调用工具，必须直接发起工具调用，不要在你的回复文本中提到工具名称或说“我将使用某工具”。
+        生成运动计划时，运动天数必须与用户提供的“每周训练次数”完全一致。如果用户说4次，则只安排4天运动，其余为休息日。
+        """;
+    private static final int MAX_ATTEMPTS = 3;
     private static final int MAX_TOOL_ROUNDS = 5;
     private static final int MAX_TOOL_CALLS_PER_ROUND = 4;
     private static final int MAX_PROVIDER_ERROR_LENGTH = 240;
@@ -101,12 +117,14 @@ public class ZhipuAiClient implements
             ObjectMapper objectMapper,
             HttpClient httpClient,
             WechatAudioConverter audioConverter,
-            ToolRegistry toolRegistry) {
+            ToolRegistry toolRegistry,
+            ToolExecutionStateStore executionStateStore) {
         this.properties = properties;
         this.objectMapper = objectMapper;
         this.httpClient = httpClient;
         this.audioConverter = audioConverter;
         this.toolRegistry = toolRegistry;
+        this.executionStateStore = executionStateStore;
     }
 
     @Override
@@ -134,11 +152,31 @@ public class ZhipuAiClient implements
     }
 
     private ChatOutcome chatWithModel(ChatRequest request, String model, ToolContext context) {
-        ObjectNode payload = buildChatPayload(request, model);
-        List<ChatOutcome.Media> media = new ArrayList<>();
-        for (int round = 0; round <= MAX_TOOL_ROUNDS; round++) {
+        // 生成稳定的会话标识，用于断点恢复（可根据实际情况调整）
+        String sessionId = context.userId() + ":" + request.text().hashCode() + ":" + request.images().size();
+        ToolExecutionStateStore.ExecutionState savedState = executionStateStore.get(sessionId);
+
+        ObjectNode payload;
+        List<ChatOutcome.Media> media;
+        int startRound;
+
+        if (savedState != null) {
+            // 恢复之前保存的状态
+            payload = (ObjectNode) savedState.payload();
+            media = new ArrayList<>(savedState.media());
+            startRound = savedState.currentRound();
+            executionStateStore.remove(sessionId); // 取出后移除，避免重复
+            LOGGER.info("恢复未完成的工具执行，从第 {} 轮继续", startRound);
+        } else {
+            payload = buildChatPayload(request, model);
+            media = new ArrayList<>();
+            startRound = 0;
+        }
+
+        for (int round = startRound; round <= MAX_TOOL_ROUNDS; round++) {
             JsonNode response = executeJson(properties.chatEndpoint(), payload);
             List<ModelToolCall> toolCalls = extractToolCalls(response);
+
             if (toolCalls.isEmpty()) {
                 String answer = extractOutputText(response);
                 if (answer == null || answer.isBlank()) {
@@ -146,19 +184,22 @@ public class ZhipuAiClient implements
                 }
                 return new ChatOutcome(answer.strip(), media);
             }
+
             if (!request.images().isEmpty()) {
                 throw new LlmException("视觉模型返回了不支持的工具调用");
             }
             if (round >= MAX_TOOL_ROUNDS) {
                 throw new LlmException("模型连续请求工具，超过最大调用轮数");
             }
+
             appendAssistantToolRequest(payload, response);
+
             if (canRunInParallel(toolCalls)) {
                 LOGGER.info("第 {} 轮并行执行 {} 个独立工具", round + 1, toolCalls.size());
                 List<ToolRegistry.Invocation> invocations = invokeToolsInParallel(toolCalls, context);
                 for (int index = 0; index < toolCalls.size(); index++) {
                     ChatOutcome completed = applyToolInvocation(
-                            payload, toolCalls.get(index), invocations.get(index), media);
+                        payload, toolCalls.get(index), invocations.get(index), media);
                     if (completed != null) {
                         return completed;
                     }
@@ -168,13 +209,22 @@ public class ZhipuAiClient implements
                 for (ModelToolCall toolCall : toolCalls) {
                     ToolRegistry.Invocation invocation = invokeTool(toolCall, context);
                     ChatOutcome completed = applyToolInvocation(
-                            payload, toolCall, invocation, media);
+                        payload, toolCall, invocation, media);
                     if (completed != null) {
                         return completed;
                     }
                 }
             }
+
+            // 每轮工具执行完成后保存状态，以便失败后恢复
+            executionStateStore.save(sessionId, new ToolExecutionStateStore.ExecutionState(
+                payload.deepCopy(),
+                List.copyOf(media),
+                round + 1,  // 下一轮索引
+                model
+            ));
         }
+
         throw new LlmException("模型工具调用没有产生最终回答");
     }
 
@@ -184,23 +234,23 @@ public class ZhipuAiClient implements
     }
 
     private List<ToolRegistry.Invocation> invokeToolsInParallel(
-            List<ModelToolCall> toolCalls,
-            ToolContext context) {
-        try (ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor()) {
-            List<Future<ToolRegistry.Invocation>> futures = toolCalls.stream()
-                    .map(call -> executor.submit(() -> invokeTool(call, context)))
-                    .toList();
-            List<ToolRegistry.Invocation> invocations = new ArrayList<>(futures.size());
-            for (Future<ToolRegistry.Invocation> future : futures) {
+        List<ModelToolCall> toolCalls,
+        ToolContext context) {
+        List<Future<ToolRegistry.Invocation>> futures = toolCalls.stream()
+            .map(call -> VIRTUAL_THREAD_POOL.submit(() -> invokeTool(call, context)))
+            .toList();
+        List<ToolRegistry.Invocation> invocations = new ArrayList<>(futures.size());
+        for (Future<ToolRegistry.Invocation> future : futures) {
+            try {
                 invocations.add(future.get());
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw new LlmException("并行工具执行被中断", e);
+            } catch (ExecutionException e) {
+                throw new LlmException("并行工具执行异常", e.getCause());
             }
-            return List.copyOf(invocations);
-        } catch (InterruptedException exception) {
-            Thread.currentThread().interrupt();
-            throw new LlmException("并行工具执行被中断", exception);
-        } catch (ExecutionException exception) {
-            throw new LlmException("并行工具执行异常", exception.getCause());
         }
+        return List.copyOf(invocations);
     }
 
     private ToolRegistry.Invocation invokeTool(ModelToolCall toolCall, ToolContext context) {
@@ -305,7 +355,9 @@ public class ZhipuAiClient implements
         ObjectNode root = objectMapper.createObjectNode();
         root.put("model", model);
 
-        if (request.images().isEmpty() && !toolRegistry.definitions().isEmpty()) {
+        // 只有纯文本请求且存在可用工具时才注册工具，避免视觉模型发起工具调用
+        boolean hasTools = request.images().isEmpty() && !toolRegistry.definitions().isEmpty();
+        if (hasTools) {
             ArrayNode tools = root.putArray("tools");
             for (ToolDefinition definition : toolRegistry.definitions()) {
                 tools.add(definition.toApiJson(objectMapper));
@@ -314,38 +366,43 @@ public class ZhipuAiClient implements
         }
 
         ArrayNode messages = root.putArray("messages");
+        // 根据是否有工具选择不同的系统提示，减少无关 token 消耗
+        String systemPrompt = hasTools ? SYSTEM_INSTRUCTIONS_WITH_PLANNING : SYSTEM_INSTRUCTIONS_BASIC;
         messages.addObject()
-                .put("role", "system")
-                .put("content", SYSTEM_INSTRUCTIONS);
+            .put("role", "system")
+            .put("content", systemPrompt);
+
         if (!request.groundingContext().isBlank()) {
             messages.addObject()
-                    .put("role", "system")
-                    .put("content", request.groundingContext());
+                .put("role", "system")
+                .put("content", request.groundingContext());
         }
         appendHistory(messages, request.history());
 
         ObjectNode current = messages.addObject();
         current.put("role", "user");
         String text = request.text().isBlank()
-                ? "请识别并描述图片内容；如果图片中包含文字，请一并提取。"
-                : request.text();
+            ? "请识别并描述图片内容；如果图片中包含文字，请一并提取。"
+            : request.text();
+
         if (request.images().isEmpty()) {
             current.put("content", text);
             return root;
         }
 
+        // 图片请求：构造多模态消息
         ArrayNode content = current.putArray("content");
         for (ImageInput image : request.images()) {
             String dataUrl = "data:" + image.mediaType() + ";base64,"
-                    + Base64.getEncoder().encodeToString(image.data());
+                + Base64.getEncoder().encodeToString(image.data());
             content.addObject()
-                    .put("type", "image_url")
-                    .putObject("image_url")
-                    .put("url", dataUrl);
+                .put("type", "image_url")
+                .putObject("image_url")
+                .put("url", dataUrl);
         }
         content.addObject()
-                .put("type", "text")
-                .put("text", text);
+            .put("type", "text")
+            .put("text", text);
         return root;
     }
 

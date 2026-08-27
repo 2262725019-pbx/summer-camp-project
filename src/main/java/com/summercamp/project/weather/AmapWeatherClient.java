@@ -12,6 +12,7 @@ import java.net.http.HttpResponse;
 import java.net.http.HttpTimeoutException;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -66,15 +67,37 @@ public class AmapWeatherClient implements WeatherClient {
         if (matches.isEmpty()) {
             throw new WeatherLocationNotFoundException(normalized);
         }
+
+        // 优先精确匹配（名称完全相同或输入以名称结尾）
         List<ResolvedLocation> exact = matches.stream()
-                .filter(match -> normalized.endsWith(match.name()) || normalized.equals(match.name()))
-                .toList();
+            .filter(match -> normalized.endsWith(match.name()) || normalized.equals(match.name()))
+            .toList();
         if (exact.size() == 1) {
             return exact.getFirst();
         }
+
+        // 如果精确匹配为空，但存在多个结果，尝试选择城市级别（adcode 以 00 结尾）
+        if (exact.isEmpty() && matches.size() > 1) {
+            List<ResolvedLocation> cityLevel = matches.stream()
+                .filter(m -> m.adcode().endsWith("00"))
+                .toList();
+            if (cityLevel.size() == 1) {
+                return cityLevel.getFirst();
+            }
+            if (!cityLevel.isEmpty()) {
+                // 如果仍有多个城市级，选择名称最短的（通常最通用）
+                return cityLevel.stream()
+                    .min(Comparator.comparingInt(m -> m.name().length()))
+                    .orElseThrow();
+            }
+        }
+
+        // 如果只有一个匹配，直接返回
         if (matches.size() == 1) {
             return matches.getFirst();
         }
+
+        // 其他情况仍报歧义
         throw new WeatherLocationAmbiguousException(normalized);
     }
 

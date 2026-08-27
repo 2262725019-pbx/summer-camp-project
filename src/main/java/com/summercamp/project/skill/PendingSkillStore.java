@@ -43,6 +43,11 @@ public class PendingSkillStore {
         entries.remove(userId);
     }
 
+    public void cleanupExpired() {
+        Instant now = clock.instant();
+        entries.entrySet().removeIf(entry -> !entry.getValue().expiresAt().isAfter(now));
+    }
+
     private record Entry(String skillName, Instant expiresAt) {
     }
 }

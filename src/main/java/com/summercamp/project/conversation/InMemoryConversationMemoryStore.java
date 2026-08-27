@@ -11,7 +11,6 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import org.springframework.stereotype.Component;
 
-/** Per-user, in-memory conversation history. Image bytes are deliberately never stored here. */
 @Component
 public class InMemoryConversationMemoryStore implements ConversationMemoryStore {
 
@@ -65,6 +64,11 @@ public class InMemoryConversationMemoryStore implements ConversationMemoryStore 
         sessions.remove(userId);
     }
 
+    public void cleanupExpired() {
+        Instant now = clock.instant();
+        sessions.entrySet().removeIf(entry -> entry.getValue().updatedAt.plus(TIME_TO_LIVE).isBefore(now));
+    }
+
     private void add(Session session, ChatMessage message) {
         session.messages.addLast(message);
         session.characters += message.content().length();
@@ -72,10 +76,10 @@ public class InMemoryConversationMemoryStore implements ConversationMemoryStore 
 
     private void trim(Session session) {
         while (session.messages.size() > MAX_MESSAGES
-                || session.characters > MAX_CHARACTERS) {
+            || session.characters > MAX_CHARACTERS) {
             removeFirst(session);
             if (!session.messages.isEmpty()
-                    && "assistant".equals(session.messages.getFirst().role())) {
+                && "assistant".equals(session.messages.getFirst().role())) {
                 removeFirst(session);
             }
         }

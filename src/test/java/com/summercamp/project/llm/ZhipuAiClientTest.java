@@ -62,25 +62,26 @@ class ZhipuAiClientTest {
 
     private ZhipuAiClient newClient(HttpClient httpClient, ToolRegistry toolRegistry) {
         AiChatProperties properties = new AiChatProperties(
-                "https://open.bigmodel.cn/api/paas/v4",
-                "/chat/completions",
-                "/images/generations",
-                "/audio/transcriptions",
-                "test-key",
-                "text-model",
-                List.of("text-fallback-1", "text-fallback-2"),
-                "vision-model",
-                List.of("vision-fallback-1", "vision-fallback-2"),
-                "image-model",
-                "1024x1024",
-                "asr-model",
-                Duration.ofSeconds(10));
+            "https://open.bigmodel.cn/api/paas/v4",
+            "/chat/completions",
+            "/images/generations",
+            "/audio/transcriptions",
+            "test-key",
+            "text-model",
+            List.of("text-fallback-1", "text-fallback-2"),
+            "vision-model",
+            List.of("vision-fallback-1", "vision-fallback-2"),
+            "image-model",
+            "1024x1024",
+            "asr-model",
+            Duration.ofSeconds(10));
         return new ZhipuAiClient(
-                properties,
-                objectMapper,
-                httpClient,
-                new WechatAudioConverter(),
-                toolRegistry);
+            properties,
+            objectMapper,
+            httpClient,
+            new WechatAudioConverter(),
+            toolRegistry,
+            new ToolExecutionStateStore());   // ← 新增参数
     }
 
     @Test

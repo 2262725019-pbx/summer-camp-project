@@ -40,6 +40,11 @@ public class PendingWeatherRequestStore {
         entries.remove(userId);
     }
 
+    public void cleanupExpired() {
+        Instant now = clock.instant();
+        entries.entrySet().removeIf(entry -> !entry.getValue().expiresAt().isAfter(now));
+    }
+
     private record Entry(WeatherPeriod period, Instant expiresAt) {
     }
 }

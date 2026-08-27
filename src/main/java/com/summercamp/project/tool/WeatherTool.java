@@ -69,7 +69,7 @@ public class WeatherTool implements BotTool {
         ObjectNode properties = schema.putObject("properties");
         properties.putObject("location")
                 .put("type", "string")
-                .put("description", "中国城市或区县名称，例如：北京、江西省宜春市袁州区")
+                .put("description", "中国城市或区县名称，建议使用完整行政区划名称，如“北京市”、“上海市浦东新区”等")
                 .put("minLength", 1)
                 .put("maxLength", MAX_LOCATION_CHARACTERS);
         properties.putObject("period")
