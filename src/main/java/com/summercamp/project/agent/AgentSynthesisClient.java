@@ -2,9 +2,9 @@ package com.summercamp.project.agent;
 
 @FunctionalInterface
 public interface AgentSynthesisClient {
-    String synthesize(String originalGoal, String observationContext);
+    AgentSynthesisResult synthesize(String originalGoal, String observationContext);
 
-    default String synthesize(
+    default AgentSynthesisResult synthesize(
             String originalGoal,
             String observationContext,
             AgentRunMetrics metrics

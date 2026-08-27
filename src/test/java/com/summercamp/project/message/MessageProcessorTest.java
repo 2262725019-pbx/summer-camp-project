@@ -6,14 +6,27 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.summercamp.project.agent.AgentGoalMatcher;
+import com.summercamp.project.agent.AgentAction;
+import com.summercamp.project.agent.AgentActionHandler;
+import com.summercamp.project.agent.AgentActionHandlerRegistry;
+import com.summercamp.project.agent.AgentExecutionContext;
+import com.summercamp.project.agent.AgentExecutor;
+import com.summercamp.project.agent.AgentObservation;
 import com.summercamp.project.agent.AgentOrchestrator;
+import com.summercamp.project.agent.AgentPlan;
+import com.summercamp.project.agent.AgentResumeInput;
+import com.summercamp.project.agent.AgentRunCheckpoint;
 import com.summercamp.project.agent.AgentRunRequest;
 import com.summercamp.project.agent.AgentRunResult;
+import com.summercamp.project.agent.AgentState;
+import com.summercamp.project.agent.AgentStep;
+import com.summercamp.project.agent.PendingAgentRunStore;
 import com.summercamp.project.config.RagProperties;
 import com.summercamp.project.conversation.InMemoryConversationMemoryStore;
 import com.summercamp.project.intent.IntentClassificationClient;
@@ -49,6 +62,7 @@ import com.summercamp.project.wechat.WechatGateway;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -61,6 +75,7 @@ class MessageProcessorTest {
     private InMemoryConversationMemoryStore memory;
     private MessageProcessor processor;
     private AgentOrchestrator agentOrchestrator;
+    private PendingAgentRunStore pendingAgentRunStore;
 
     @BeforeEach
     void setUp() {
@@ -68,6 +83,7 @@ class MessageProcessorTest {
         model = new FakeModel();
         memory = new InMemoryConversationMemoryStore();
         agentOrchestrator = mock(AgentOrchestrator.class);
+        pendingAgentRunStore = new PendingAgentRunStore();
         when(agentOrchestrator.run(any(AgentRunRequest.class))).thenReturn(new AgentRunResult(
                 AgentRunResult.Status.COMPLETED,
                 "agent-final-reply",
@@ -93,7 +109,8 @@ class MessageProcessorTest {
                 memory,
                 new MessageDeduplicator(),
                 new AgentGoalMatcher(),
-                agentOrchestrator);
+                agentOrchestrator,
+                pendingAgentRunStore);
     }
 
     @Test
@@ -188,6 +205,157 @@ class MessageProcessorTest {
         assertTrue(request.getValue().voiceMessage());
         assertEquals(1, gateway.sentVoices.size());
         assertTrue(gateway.sentTexts.isEmpty());
+    }
+
+    @Test
+    void shouldResumePendingAgentBeforeChatAndRecordOnlyLatestSupplement() {
+        String goal = "制定未来七天运动饮食和作息计划";
+        AgentRunResult waiting = waitingAgentResult(goal);
+        when(agentOrchestrator.run(any(AgentRunRequest.class))).thenReturn(waiting);
+        when(agentOrchestrator.resume(
+                any(AgentRunCheckpoint.class),
+                any(String.class),
+                any(AgentResumeInput.class),
+                any(List.class),
+                org.mockito.ArgumentMatchers.anyBoolean())).thenReturn(new AgentRunResult(
+                        AgentRunResult.Status.COMPLETED,
+                        "resume-final-reply",
+                        waiting.plan(),
+                        waiting.state()));
+
+        processor.process(textMessage("agent-first", "user-a", "/agent " + goal));
+        String supplement = "性别：男\n年龄：22\n每日餐数：4餐";
+        processor.process(textMessage("agent-resume", "user-a", supplement));
+
+        ArgumentCaptor<AgentResumeInput> input = ArgumentCaptor.forClass(AgentResumeInput.class);
+        verify(agentOrchestrator).resume(
+                any(AgentRunCheckpoint.class),
+                org.mockito.ArgumentMatchers.eq("user-a"),
+                input.capture(),
+                any(List.class),
+                org.mockito.ArgumentMatchers.eq(false));
+        assertEquals("meal", input.getValue().waitingStepId());
+        assertEquals(supplement, input.getValue().supplementText());
+        assertEquals(1, input.getValue().attempt());
+        assertTrue(model.chatRequests.isEmpty());
+        assertTrue(pendingAgentRunStore.get("user-a").isEmpty());
+        List<ChatMessage> history = memory.history("user-a");
+        assertEquals(4, history.size());
+        assertEquals(goal, history.get(0).content());
+        assertEquals(supplement, history.get(2).content());
+        assertEquals(1, history.stream().filter(item -> goal.equals(item.content())).count());
+    }
+
+    @Test
+    void shouldCancelOrClearPendingAgentWithoutResume() {
+        String goal = "制定未来七天健康计划";
+        when(agentOrchestrator.run(any(AgentRunRequest.class)))
+                .thenReturn(waitingAgentResult(goal));
+
+        processor.process(textMessage("agent-cancel-start", "user-a", "/agent " + goal));
+        processor.process(textMessage("agent-cancel", "user-a", "算了"));
+        assertTrue(pendingAgentRunStore.get("user-a").isEmpty());
+        assertEquals("已取消待补充的 Agent 规划。", gateway.sentTexts.getLast());
+
+        processor.process(textMessage("agent-clear-start", "user-a", "/agent " + goal));
+        processor.process(textMessage("agent-clear", "user-a", "/clear"));
+        assertTrue(pendingAgentRunStore.get("user-a").isEmpty());
+        assertTrue(memory.history("user-a").isEmpty());
+        verify(agentOrchestrator, never()).resume(
+                any(), any(), any(), any(), org.mockito.ArgumentMatchers.anyBoolean());
+    }
+
+    @Test
+    void newAgentReplacesPendingCheckpointAndNonChatDoesNotConsumeIt() {
+        String firstGoal = "制定未来七天健康计划";
+        AgentRunResult firstWaiting = waitingAgentResult(firstGoal);
+        AgentRunResult completed = new AgentRunResult(
+                AgentRunResult.Status.COMPLETED, "new-agent-final", null, null);
+        when(agentOrchestrator.run(any(AgentRunRequest.class)))
+                .thenReturn(firstWaiting)
+                .thenReturn(completed);
+
+        processor.process(textMessage("agent-old", "user-a", "/agent " + firstGoal));
+        processor.process(textMessage("weather-non-chat", "user-a", "明天宜春天气怎么样"));
+
+        assertTrue(pendingAgentRunStore.get("user-a").isPresent());
+        verify(agentOrchestrator, never()).resume(
+                any(), any(), any(), any(), org.mockito.ArgumentMatchers.anyBoolean());
+
+        processor.process(textMessage("agent-new", "user-a", "/agent 制定新的完整健康目标"));
+        assertTrue(pendingAgentRunStore.get("user-a").isEmpty());
+        verify(agentOrchestrator, times(2)).run(any(AgentRunRequest.class));
+    }
+
+    @Test
+    void secondNeedsInputRefreshesCheckpointAndFourthSupplementHitsAttemptCap() {
+        String goal = "制定未来七天健康计划";
+        AgentRunResult waiting = waitingAgentResult(goal);
+        when(agentOrchestrator.run(any(AgentRunRequest.class))).thenReturn(waiting);
+        when(agentOrchestrator.resume(
+                any(), any(), any(), any(), org.mockito.ArgumentMatchers.anyBoolean()))
+                .thenReturn(waiting);
+
+        processor.process(textMessage("agent-cap-start", "user-a", "/agent " + goal));
+        processor.process(textMessage("agent-cap-1", "user-a", "补充一"));
+        assertEquals(1, pendingAgentRunStore.get("user-a").orElseThrow().resumeAttemptCount());
+        processor.process(textMessage("agent-cap-2", "user-a", "补充二"));
+        processor.process(textMessage("agent-cap-3", "user-a", "补充三"));
+        assertEquals(3, pendingAgentRunStore.get("user-a").orElseThrow().resumeAttemptCount());
+
+        processor.process(textMessage("agent-cap-4", "user-a", "补充四"));
+
+        verify(agentOrchestrator, times(3)).resume(
+                any(), any(), any(), any(), org.mockito.ArgumentMatchers.anyBoolean());
+        assertTrue(pendingAgentRunStore.get("user-a").isEmpty());
+        assertEquals("补充信息仍不足，本次规划已结束，请重新发起完整目标。", gateway.sentTexts.getLast());
+    }
+
+    @Test
+    void providerFailureDoesNotCreateCheckpointAndHelpDoesNotConsumeExistingOne() {
+        when(agentOrchestrator.run(any(AgentRunRequest.class))).thenReturn(new AgentRunResult(
+                AgentRunResult.Status.FAILED, "provider failed", null, null));
+        processor.process(textMessage("agent-provider-fail", "user-a", "/agent 制定未来七天健康计划"));
+        assertTrue(pendingAgentRunStore.get("user-a").isEmpty());
+
+        AgentRunResult waiting = waitingAgentResult("另一个健康目标");
+        pendingAgentRunStore.rememberInitial(
+                "user-a",
+                new AgentRunRequest("user-a", "另一个健康目标", List.of(), false),
+                waiting);
+        processor.process(textMessage("agent-help", "user-a", "/help"));
+        assertTrue(pendingAgentRunStore.get("user-a").isPresent());
+    }
+
+    @Test
+    void voiceSupplementResumesTypedAgentAfterTranscription() {
+        String goal = "制定未来七天健康计划";
+        AgentRunResult waiting = waitingAgentResult(goal);
+        when(agentOrchestrator.run(any(AgentRunRequest.class))).thenReturn(waiting);
+        when(agentOrchestrator.resume(
+                any(), any(), any(), any(), org.mockito.ArgumentMatchers.anyBoolean()))
+                .thenReturn(new AgentRunResult(
+                        AgentRunResult.Status.COMPLETED, "voice-resume-final", null, null));
+        processor.process(textMessage("agent-voice-start", "user-a", "/agent " + goal));
+
+        processor.process(new InboundMessage(
+                "agent-voice-resume",
+                "user-a",
+                "",
+                List.of(),
+                List.of(new VoiceInput(
+                        new byte[] {1},
+                        "性别男，年龄22岁，每日4餐",
+                        6, 16, 24_000, 1_000)),
+                false,
+                false,
+                false));
+
+        ArgumentCaptor<AgentResumeInput> input = ArgumentCaptor.forClass(AgentResumeInput.class);
+        verify(agentOrchestrator).resume(
+                any(), any(), input.capture(), any(), org.mockito.ArgumentMatchers.eq(true));
+        assertEquals("性别男，年龄22岁，每日4餐", input.getValue().supplementText());
+        assertEquals(1, gateway.sentVoices.size());
     }
 
     @Test
@@ -535,6 +703,45 @@ class MessageProcessorTest {
                 false,
                 false,
                 false);
+    }
+
+    private AgentRunResult waitingAgentResult(String goal) {
+        AgentPlan plan = new AgentPlan(goal, List.of(
+                new AgentStep("datetime", AgentAction.GET_DATETIME,
+                        "日期", "锚定", List.of()),
+                new AgentStep("meal", AgentAction.RUN_MEAL_SKILL,
+                        "饮食", "补资料", List.of("datetime")),
+                new AgentStep("validate", AgentAction.VALIDATE,
+                        "校验", "闭环", List.of("meal")),
+                new AgentStep("synthesis", AgentAction.SYNTHESIZE,
+                        "汇总", "输出", List.of("validate"))));
+        AgentActionHandler datetime = new AgentActionHandler() {
+            @Override
+            public AgentAction action() {
+                return AgentAction.GET_DATETIME;
+            }
+
+            @Override
+            public AgentObservation execute(AgentStep step, AgentExecutionContext context) {
+                return new AgentObservation(step.id(), true, "日期完成");
+            }
+        };
+        AgentActionHandler meal = new AgentActionHandler() {
+            @Override
+            public AgentAction action() {
+                return AgentAction.RUN_MEAL_SKILL;
+            }
+
+            @Override
+            public AgentObservation execute(AgentStep step, AgentExecutionContext context) {
+                return new AgentObservation(step.id(), false, "请补资料", Map.of(
+                        "code", "NEEDS_USER_INPUT", "recoverable", "true"));
+            }
+        };
+        AgentState state = new AgentExecutor(new AgentActionHandlerRegistry(List.of(datetime, meal)))
+                .execute("user-a", goal, List.of(), false, plan);
+        return new AgentRunResult(
+                AgentRunResult.Status.NEEDS_USER_INPUT, "请补资料", plan, state);
     }
 
     private static final class FakeModel implements

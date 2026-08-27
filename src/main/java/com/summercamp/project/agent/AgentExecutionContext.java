@@ -3,6 +3,7 @@ package com.summercamp.project.agent;
 import com.summercamp.project.llm.ChatMessage;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 
 public final class AgentExecutionContext {
     private final String userId;
@@ -12,9 +13,10 @@ public final class AgentExecutionContext {
     private final AgentState state;
     private final AgentPlan plan;
     private final AgentRunMetrics metrics;
+    private final AgentResumeInput resumeInput;
 
     public AgentExecutionContext(String originalGoal, AgentState state, AgentPlan plan) {
-        this("", originalGoal, List.of(), false, state, plan, AgentRunMetrics.unobserved());
+        this("", originalGoal, List.of(), false, state, plan, AgentRunMetrics.unobserved(), null);
     }
 
     public AgentExecutionContext(
@@ -25,7 +27,7 @@ public final class AgentExecutionContext {
             AgentState state,
             AgentPlan plan
     ) {
-        this(userId, originalGoal, history, voiceMessage, state, plan, AgentRunMetrics.unobserved());
+        this(userId, originalGoal, history, voiceMessage, state, plan, AgentRunMetrics.unobserved(), null);
     }
 
     public AgentExecutionContext(
@@ -37,6 +39,19 @@ public final class AgentExecutionContext {
             AgentPlan plan,
             AgentRunMetrics metrics
     ) {
+        this(userId, originalGoal, history, voiceMessage, state, plan, metrics, null);
+    }
+
+    AgentExecutionContext(
+            String userId,
+            String originalGoal,
+            List<ChatMessage> history,
+            boolean voiceMessage,
+            AgentState state,
+            AgentPlan plan,
+            AgentRunMetrics metrics,
+            AgentResumeInput resumeInput
+    ) {
         if (originalGoal == null || originalGoal.isBlank()) {
             throw new IllegalArgumentException("originalGoal must not be blank");
         }
@@ -47,6 +62,7 @@ public final class AgentExecutionContext {
         this.state = Objects.requireNonNull(state, "state must not be null");
         this.plan = Objects.requireNonNull(plan, "plan must not be null");
         this.metrics = Objects.requireNonNull(metrics, "metrics must not be null");
+        this.resumeInput = resumeInput;
         if (state.plan() != plan) {
             throw new IllegalArgumentException("state and context must reference the same plan");
         }
@@ -78,6 +94,13 @@ public final class AgentExecutionContext {
 
     public AgentRunMetrics metrics() {
         return metrics;
+    }
+
+    public Optional<String> resumeSupplementFor(String stepId) {
+        if (resumeInput == null || !resumeInput.waitingStepId().equals(stepId)) {
+            return Optional.empty();
+        }
+        return Optional.of(resumeInput.supplementText());
     }
 
     AgentState mutableState() {

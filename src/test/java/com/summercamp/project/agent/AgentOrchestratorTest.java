@@ -177,7 +177,8 @@ class AgentOrchestratorTest {
                 new AgentSynthesisContextBuilder(),
                 (goal, context) -> {
                     synthesisCalls.incrementAndGet();
-                    return "最终健康计划：按真实结果执行。";
+                    return AgentSynthesisResult.answerOnly(
+                            "最终健康计划：按真实结果执行。");
                 });
         handlers.add(recording(AgentAction.SYNTHESIZE, order, step -> synthesis.execute(
                 step, currentContext.get())));

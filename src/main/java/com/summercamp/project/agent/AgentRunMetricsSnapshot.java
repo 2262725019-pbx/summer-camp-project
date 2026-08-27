@@ -46,7 +46,23 @@ public record AgentRunMetricsSnapshot(
         long plannerGoalChars,
         long promptChars,
         long responseChars,
-        long contextChars
+        long contextChars,
+        long agentResumeCount,
+        long resumeAttemptCount,
+        long reusedCompletedStepCount,
+        long executedAfterResumeStepCount,
+        long finalValidationAttemptCount,
+        long finalValidationFailureCount,
+        long synthesisRepairTriggeredCount,
+        long synthesisRepairSucceededCount,
+        long synthesisRepairInstructionChars,
+        long plannerClosureNormalizedCount,
+        long deterministicPlannerFallbackCount,
+        long deterministicExerciseFallbackCount,
+        long deterministicSynthesisFallbackCount,
+        int deterministicPlannerFallbackReasonCode,
+        int deterministicExerciseFallbackReasonCode,
+        int deterministicSynthesisFallbackReasonCode
 ) {
     public static AgentRunMetricsSnapshot empty() {
         return new AgentRunMetricsSnapshot(
@@ -54,6 +70,24 @@ public record AgentRunMetricsSnapshot(
                 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
                 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
                 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-                0, 0, 0, 0, 0);
+                0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+    }
+
+    public AgentFallbackReason deterministicPlannerFallbackReason() {
+        return reason(deterministicPlannerFallbackReasonCode);
+    }
+
+    public AgentFallbackReason deterministicExerciseFallbackReason() {
+        return reason(deterministicExerciseFallbackReasonCode);
+    }
+
+    public AgentFallbackReason deterministicSynthesisFallbackReason() {
+        return reason(deterministicSynthesisFallbackReasonCode);
+    }
+
+    private static AgentFallbackReason reason(int code) {
+        AgentFallbackReason[] values = AgentFallbackReason.values();
+        return code >= 0 && code < values.length ? values[code] : AgentFallbackReason.NONE;
     }
 }

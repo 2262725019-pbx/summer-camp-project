@@ -8,6 +8,8 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.summercamp.project.agent.AgentPlanningClient;
 import com.summercamp.project.agent.AgentRunMetrics;
 import com.summercamp.project.agent.AgentSynthesisClient;
+import com.summercamp.project.agent.AgentSynthesisEnvelopeParser;
+import com.summercamp.project.agent.AgentSynthesisResult;
 import com.summercamp.project.config.AiChatProperties;
 import com.summercamp.project.intent.IntentClassificationClient;
 import com.summercamp.project.intent.IntentResult;
@@ -17,8 +19,9 @@ import com.summercamp.project.speech.SpeechRecognitionException;
 import com.summercamp.project.speech.SpeechToTextClient;
 import com.summercamp.project.speech.VoiceInput;
 import com.summercamp.project.speech.WechatAudioConverter;
-import com.summercamp.project.tool.ToolDefinition;
+import com.summercamp.project.tool.ToolAccessPolicy;
 import com.summercamp.project.tool.ToolContext;
+import com.summercamp.project.tool.ToolDefinition;
 import com.summercamp.project.tool.ToolRegistry;
 import com.summercamp.project.tool.ToolResult;
 import com.summercamp.project.weather.WeatherPeriod;
@@ -101,9 +104,13 @@ public class ZhipuAiClient implements
             {"intent":"CHAT","location":"","period":"CURRENT","prompt":""}
             """;
     private static final String SYNTHESIS_INSTRUCTIONS = """
-            你是健康生活规划 Agent 的最终汇总器。用中文输出清晰、可执行且章节一致的计划。
+            你是健康生活规划 Agent 的最终汇总器。只返回一个合法 JSON object，格式严格为：
+            {"answer":"用户可见的完整中文计划","audit":{"trainingDates":["2026-08-27"],
+            "sessionDurationMinutesByDate":{"2026-08-27":60}}}
+            root 只允许 answer、audit；audit 只允许 trainingDates、sessionDurationMinutesByDate。
+            answer 用中文输出清晰、可执行且章节一致的计划，不得展示 audit 或内部 JSON。
             只能整理成功事实块；不得臆造工具、天气、计算、RAG 或 Skill 结果，不得展示内部 metadata、
-            step id、JSON、调试信息。必须遵守：
+            step id、调试信息。必须遵守：
             1. WEATHER 仅以 GET_WEATHER 为事实源。THREE_DAYS 只写真实三日；从 WEATHER_UNQUERIED_FROM
                起，任何具体晴雨、温度、风力都属于未知，不得生成或推断。必须标注“未获取实时天气”。
                雨、雪等不适合户外时，同日所有运动章节改为
@@ -113,6 +120,11 @@ public class ZhipuAiClient implements
             3. 严格遵守 ORIGINAL_GOAL、TRAINING_FREQUENCY_PER_WEEK、餐数及其他真实数字。
                TRAINING_SESSION_TOTAL_MINUTES 是热身+主训练+有氧+拉伸的整次总上限；各部分合计不得超限。
                例如上限40时，5+20+15+5=45属于非法方案，必须缩短。非训练日活动须标为恢复/日常活动，不计入正式训练。
+               trainingDates 仅列正式训练日，必须使用不重复的 ISO 日期且位于计划周期。
+               恢复日的散步、拉伸和日常活动不得加入 trainingDates。
+               如果有 TRAINING_FREQUENCY_PER_WEEK，trainingDates 数量必须精确相等。
+               sessionDurationMinutesByDate 的 value 是整个 session 总时长，不是单一环节时长；
+               如果有 TRAINING_SESSION_TOTAL_MINUTES，每个正式训练日都必须填写且不得超限。
             4. 每日使用完整日期和星期，范围限于 PLAN_START_DATE 至 PLAN_END_DATE，星期必须正确。
                最终日程必须逐一覆盖 PLAN_DATE_LABELS 中每个日期；训练日+恢复日/休息日须覆盖完整规划周期。
             5. 输出前检查天气与场地、运动频次与时长、饮食份量、日期范围及跨章节数字无冲突。
@@ -124,6 +136,7 @@ public class ZhipuAiClient implements
     private final HttpClient httpClient;
     private final WechatAudioConverter audioConverter;
     private final ToolRegistry toolRegistry;
+    private final AgentSynthesisEnvelopeParser synthesisEnvelopeParser;
 
     public ZhipuAiClient(
             AiChatProperties properties,
@@ -136,6 +149,7 @@ public class ZhipuAiClient implements
         this.httpClient = httpClient;
         this.audioConverter = audioConverter;
         this.toolRegistry = toolRegistry;
+        this.synthesisEnvelopeParser = new AgentSynthesisEnvelopeParser(objectMapper);
     }
 
     @Override
@@ -191,12 +205,12 @@ public class ZhipuAiClient implements
     }
 
     @Override
-    public String synthesize(String originalGoal, String observationContext) {
+    public AgentSynthesisResult synthesize(String originalGoal, String observationContext) {
         return synthesize(originalGoal, observationContext, AgentRunMetrics.unobserved());
     }
 
     @Override
-    public String synthesize(
+    public AgentSynthesisResult synthesize(
             String originalGoal,
             String observationContext,
             AgentRunMetrics metrics
@@ -208,10 +222,11 @@ public class ZhipuAiClient implements
             throw new IllegalArgumentException("observationContext must not be blank");
         }
         metrics.recordSynthesisInstructionChars(SYNTHESIS_INSTRUCTIONS.length());
-        return executeAgentText(
+        String rawEnvelope = executeAgentText(
                 AgentLlmOperation.SYNTHESIS,
                 model -> buildSynthesisPayload(originalGoal, observationContext, model),
                 Objects.requireNonNull(metrics, "metrics must not be null"));
+        return synthesisEnvelopeParser.parse(rawEnvelope);
     }
 
     private ChatOutcome chatWithModel(
@@ -239,9 +254,10 @@ public class ZhipuAiClient implements
                 throw new LlmException("模型连续请求工具，超过最大调用轮数");
             }
             appendAssistantToolRequest(payload, response);
-            if (canRunInParallel(toolCalls)) {
+            if (canRunInParallel(toolCalls, request.toolAccessPolicy())) {
                 LOGGER.info("第 {} 轮并行执行 {} 个独立工具", round + 1, toolCalls.size());
-                List<ToolRegistry.Invocation> invocations = invokeToolsInParallel(toolCalls, context);
+                List<ToolRegistry.Invocation> invocations = invokeToolsInParallel(
+                        toolCalls, context, request.toolAccessPolicy());
                 for (int index = 0; index < toolCalls.size(); index++) {
                     ChatOutcome completed = applyToolInvocation(
                             payload, toolCalls.get(index), invocations.get(index), media);
@@ -252,7 +268,8 @@ public class ZhipuAiClient implements
             } else {
                 LOGGER.info("第 {} 轮串行执行 {} 个工具", round + 1, toolCalls.size());
                 for (ModelToolCall toolCall : toolCalls) {
-                    ToolRegistry.Invocation invocation = invokeTool(toolCall, context);
+                    ToolRegistry.Invocation invocation = invokeTool(
+                            toolCall, context, request.toolAccessPolicy());
                     ChatOutcome completed = applyToolInvocation(
                             payload, toolCall, invocation, media);
                     if (completed != null) {
@@ -306,9 +323,12 @@ public class ZhipuAiClient implements
             }
         }
         if (lastFailure != null) {
-            throw lastFailure;
+            AgentProviderFailureClassifier.Failure classified =
+                    AgentProviderFailureClassifier.classify(lastFailure);
+            throw providerException("EXERCISE", classified, lastFailure);
         }
-        throw new LlmException("Agent skill provider failed: NON_RETRYABLE");
+        throw new AgentProviderException(
+                "EXERCISE", AgentProviderFailureCategory.NON_RETRYABLE, null);
     }
 
     private JsonNode executeAgentExerciseProviderAttempt(
@@ -377,17 +397,24 @@ public class ZhipuAiClient implements
         JsonNode execute(ObjectNode payload, int round);
     }
 
-    private boolean canRunInParallel(List<ModelToolCall> toolCalls) {
+    private boolean canRunInParallel(
+            List<ModelToolCall> toolCalls,
+            ToolAccessPolicy accessPolicy
+    ) {
         return toolCalls.size() > 1
-                && toolCalls.stream().allMatch(call -> toolRegistry.isParallelSafe(call.name()));
+                && toolCalls.stream().allMatch(call -> accessPolicy.allows(call.name())
+                        && toolRegistry.isParallelSafe(call.name()));
     }
 
     private List<ToolRegistry.Invocation> invokeToolsInParallel(
             List<ModelToolCall> toolCalls,
-            ToolContext context) {
+            ToolContext context,
+            ToolAccessPolicy accessPolicy
+    ) {
         try (ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor()) {
             List<Future<ToolRegistry.Invocation>> futures = toolCalls.stream()
-                    .map(call -> executor.submit(() -> invokeTool(call, context)))
+                    .map(call -> executor.submit(() -> invokeTool(
+                            call, context, accessPolicy)))
                     .toList();
             List<ToolRegistry.Invocation> invocations = new ArrayList<>(futures.size());
             for (Future<ToolRegistry.Invocation> future : futures) {
@@ -402,9 +429,14 @@ public class ZhipuAiClient implements
         }
     }
 
-    private ToolRegistry.Invocation invokeTool(ModelToolCall toolCall, ToolContext context) {
+    private ToolRegistry.Invocation invokeTool(
+            ModelToolCall toolCall,
+            ToolContext context,
+            ToolAccessPolicy accessPolicy
+    ) {
         LOGGER.info("模型请求调用工具：{}", toolCall.name());
-        return toolRegistry.invoke(toolCall.name(), toolCall.arguments(), context);
+        return toolRegistry.invoke(
+                toolCall.name(), toolCall.arguments(), context, accessPolicy);
     }
 
     private ChatOutcome applyToolInvocation(
@@ -523,6 +555,7 @@ public class ZhipuAiClient implements
         root.put("temperature", 0.2);
         root.put("max_tokens", properties.agentSynthesisMaxTokens());
         root.putObject("thinking").put("type", "disabled");
+        root.putObject("response_format").put("type", "json_object");
         ArrayNode messages = root.putArray("messages");
         messages.addObject().put("role", "system").put("content", SYNTHESIS_INSTRUCTIONS);
         messages.addObject().put("role", "user").put("content", observationContext);
@@ -538,7 +571,7 @@ public class ZhipuAiClient implements
         root.put("model", model);
 
         List<ToolDefinition> availableTools = toolRegistry.definitions().stream()
-                .filter(definition -> !request.disabledTools().contains(definition.name()))
+                .filter(definition -> request.toolAccessPolicy().allows(definition.name()))
                 .toList();
         if (request.images().isEmpty() && !availableTools.isEmpty()) {
             ArrayNode tools = root.putArray("tools");
@@ -828,7 +861,20 @@ public class ZhipuAiClient implements
                 break;
             }
         }
-        throw new LlmException("Agent provider failed: " + lastCode, lastFailure);
+        AgentProviderFailureClassifier.Failure classified =
+                AgentProviderFailureClassifier.classify(lastFailure);
+        throw providerException(operation.codePrefix(), classified, lastFailure);
+    }
+
+    private AgentProviderException providerException(
+            String operation,
+            AgentProviderFailureClassifier.Failure failure,
+            Throwable cause
+    ) {
+        return new AgentProviderException(
+                operation,
+                AgentProviderFailureCategory.valueOf(failure.category().name()),
+                cause);
     }
 
     private JsonNode executeJsonSingleAttempt(

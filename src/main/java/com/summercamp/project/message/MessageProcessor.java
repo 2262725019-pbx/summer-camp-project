@@ -3,8 +3,11 @@ package com.summercamp.project.message;
 import com.summercamp.project.agent.AgentGoalMatch;
 import com.summercamp.project.agent.AgentGoalMatcher;
 import com.summercamp.project.agent.AgentOrchestrator;
+import com.summercamp.project.agent.AgentResumeInput;
+import com.summercamp.project.agent.AgentRunCheckpoint;
 import com.summercamp.project.agent.AgentRunRequest;
 import com.summercamp.project.agent.AgentRunResult;
+import com.summercamp.project.agent.PendingAgentRunStore;
 import com.summercamp.project.conversation.ConversationMemoryStore;
 import com.summercamp.project.intent.IntentRecognizer;
 import com.summercamp.project.intent.IntentResult;
@@ -87,6 +90,7 @@ public class MessageProcessor {
     private final MessageDeduplicator deduplicator;
     private final AgentGoalMatcher agentGoalMatcher;
     private final AgentOrchestrator agentOrchestrator;
+    private final PendingAgentRunStore pendingAgentRunStore;
 
     public MessageProcessor(
             WechatGateway gateway,
@@ -103,7 +107,8 @@ public class MessageProcessor {
             ConversationMemoryStore memoryStore,
             MessageDeduplicator deduplicator,
             AgentGoalMatcher agentGoalMatcher,
-            AgentOrchestrator agentOrchestrator) {
+            AgentOrchestrator agentOrchestrator,
+            PendingAgentRunStore pendingAgentRunStore) {
         this.gateway = gateway;
         this.chatClient = chatClient;
         this.imageClient = imageClient;
@@ -119,6 +124,7 @@ public class MessageProcessor {
         this.deduplicator = deduplicator;
         this.agentGoalMatcher = agentGoalMatcher;
         this.agentOrchestrator = agentOrchestrator;
+        this.pendingAgentRunStore = pendingAgentRunStore;
     }
 
     public void process(InboundMessage message) {
@@ -175,6 +181,7 @@ public class MessageProcessor {
             return;
         }
         if (agentGoal.status() == AgentGoalMatch.Status.MATCHED) {
+            pendingAgentRunStore.clear(message.userId());
             runAgent(message, agentGoal.goal());
             return;
         }
@@ -184,12 +191,27 @@ public class MessageProcessor {
             memoryStore.clear(message.userId());
             pendingWeatherStore.clear(message.userId());
             pendingSkillStore.clear(message.userId());
+            pendingAgentRunStore.clear(message.userId());
             sendReply(message, "已清除你的对话上下文和待处理请求。");
             return;
         }
         if (intent.type() == IntentType.HELP) {
             sendReply(message, HELP_TEXT);
             return;
+        }
+
+        if (intent.type() == IntentType.CHAT) {
+            Optional<AgentRunCheckpoint> pendingAgent =
+                    pendingAgentRunStore.get(message.userId());
+            if (pendingAgent.isPresent()) {
+                if (isCancellation(command)) {
+                    pendingAgentRunStore.clear(message.userId());
+                    sendReply(message, "已取消待补充的 Agent 规划。");
+                    return;
+                }
+                resumeAgent(message, command, pendingAgent.orElseThrow());
+                return;
+            }
         }
 
         Optional<SkillRegistry.Match> skillMatch = skillRegistry.match(command);
@@ -241,16 +263,69 @@ public class MessageProcessor {
     }
 
     private void runAgent(InboundMessage message, String goal) throws IOException {
-        AgentRunResult result = agentOrchestrator.run(new AgentRunRequest(
+        AgentRunRequest request = new AgentRunRequest(
                 message.userId(),
                 goal,
                 memoryStore.history(message.userId()),
                 message.isVoiceMessage()
-        ));
+        );
+        AgentRunResult result = agentOrchestrator.run(request);
+        if (result.status() == AgentRunResult.Status.NEEDS_USER_INPUT) {
+            pendingAgentRunStore.rememberInitial(message.userId(), request, result)
+                    .ifPresent(checkpoint -> LOGGER.info(
+                            "Agent checkpoint saved: waitingAction={}, resumeAttempt=0",
+                            checkpoint.waitingAction()));
+        } else {
+            pendingAgentRunStore.clear(message.userId());
+        }
         sendReply(message, result.reply());
         if (result.status() == AgentRunResult.Status.COMPLETED
                 || result.status() == AgentRunResult.Status.NEEDS_USER_INPUT) {
             memoryStore.recordExchange(message.userId(), goal, result.reply());
+        }
+    }
+
+    private void resumeAgent(
+            InboundMessage message,
+            String supplement,
+            AgentRunCheckpoint checkpoint
+    ) throws IOException {
+        if (checkpoint.resumeAttemptCount() >= AgentOrchestrator.MAX_RESUME_ATTEMPTS) {
+            pendingAgentRunStore.clear(message.userId());
+            String reply = "补充信息仍不足，本次规划已结束，请重新发起完整目标。";
+            sendReply(message, reply);
+            memoryStore.recordExchange(message.userId(), supplement, reply);
+            return;
+        }
+
+        AgentResumeInput input = new AgentResumeInput(
+                checkpoint.waitingStepId(),
+                supplement,
+                checkpoint.resumeAttemptCount() + 1);
+        AgentRunResult result = agentOrchestrator.resume(
+                checkpoint,
+                message.userId(),
+                input,
+                memoryStore.history(message.userId()),
+                message.isVoiceMessage());
+        if (result.status() == AgentRunResult.Status.NEEDS_USER_INPUT) {
+            Optional<AgentRunCheckpoint> refreshed = pendingAgentRunStore.rememberResumed(
+                    message.userId(), checkpoint, result);
+            if (refreshed.isEmpty()) {
+                pendingAgentRunStore.clear(message.userId());
+            } else {
+                LOGGER.info(
+                        "Agent checkpoint refreshed: waitingAction={}, resumeAttempt={}",
+                        refreshed.orElseThrow().waitingAction(),
+                        refreshed.orElseThrow().resumeAttemptCount());
+            }
+        } else {
+            pendingAgentRunStore.clear(message.userId());
+        }
+        sendReply(message, result.reply());
+        if (result.status() == AgentRunResult.Status.COMPLETED
+                || result.status() == AgentRunResult.Status.NEEDS_USER_INPUT) {
+            memoryStore.recordExchange(message.userId(), supplement, result.reply());
         }
     }
 

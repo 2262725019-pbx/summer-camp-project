@@ -94,6 +94,10 @@ class AgentRunMetricsTest {
         assertTrue(metrics.plannerDurationMs() >= 0);
         assertTrue(metrics.executorDurationMs() >= 0);
         assertTrue(metrics.synthesisDurationMs() >= 0);
+        assertEquals(1, metrics.finalValidationAttemptCount());
+        assertEquals(0, metrics.finalValidationFailureCount());
+        assertEquals(0, metrics.synthesisRepairTriggeredCount());
+        assertEquals(0, metrics.synthesisRepairSucceededCount());
     }
 
     @Test
@@ -381,12 +385,12 @@ class AgentRunMetricsTest {
     private AgentSynthesisClient synthesisClient(AtomicReference<String> synthesisContext) {
         return new AgentSynthesisClient() {
             @Override
-            public String synthesize(String originalGoal, String observationContext) {
-                return "最终健康计划";
+            public AgentSynthesisResult synthesize(String originalGoal, String observationContext) {
+                return AgentSynthesisResult.answerOnly("最终健康计划");
             }
 
             @Override
-            public String synthesize(
+            public AgentSynthesisResult synthesize(
                     String originalGoal,
                     String observationContext,
                     AgentRunMetrics metrics
@@ -395,7 +399,7 @@ class AgentRunMetricsTest {
                 metrics.recordProviderRequest(
                         observationContext.length(), observationContext.length());
                 metrics.recordProviderResponse(8);
-                return "最终健康计划";
+                return AgentSynthesisResult.answerOnly("最终健康计划");
             }
         };
     }

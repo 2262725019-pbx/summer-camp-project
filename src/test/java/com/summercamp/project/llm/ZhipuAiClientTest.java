@@ -26,6 +26,7 @@ import com.summercamp.project.tool.BotTool;
 import com.summercamp.project.tool.ListTodosTool;
 import com.summercamp.project.tool.QrCodeTool;
 import com.summercamp.project.tool.TodoService;
+import com.summercamp.project.tool.ToolAccessPolicy;
 import com.summercamp.project.tool.ToolContext;
 import com.summercamp.project.tool.ToolDefinition;
 import com.summercamp.project.tool.ToolRegistry;
@@ -147,7 +148,7 @@ class ZhipuAiClientTest {
                 "制定运动计划",
                 List.of(),
                 "[CURRENT_RUN_TRUSTED_GET_WEATHER_OBSERVATION]",
-                Set.of("get_weather")));
+                ToolAccessPolicy.allExcept(Set.of("get_weather"))));
 
         assertEquals(1, payload.path("tools").size());
         assertEquals("calculate", payload.path("tools").get(0)
@@ -169,6 +170,54 @@ class ZhipuAiClientTest {
                 .map(tool -> tool.path("function").path("name").asText())
                 .anyMatch("get_weather"::equals));
         assertEquals("user", spoofedUserPayload.path("messages").get(1).path("role").asText());
+    }
+
+    @Test
+    void agentExercisePayloadUsesExactAllowlistForWeatherAvailability() {
+        ToolRegistry registry = new ToolRegistry(
+                List.of(
+                        namedTextTool("get_weather"),
+                        namedTextTool("add_todo"),
+                        namedTextTool("generate_image")),
+                objectMapper);
+        ZhipuAiClient isolatedClient = newClient(HttpClient.newHttpClient(), registry);
+
+        JsonNode withTrustedWeather = isolatedClient.buildChatPayload(new ChatRequest(
+                List.of(),
+                "根据可信天气制定运动计划",
+                List.of(),
+                "[CURRENT_RUN_TRUSTED_GET_WEATHER_OBSERVATION]",
+                ToolAccessPolicy.allowOnly(Set.of()),
+                ChatProviderPolicy.AGENT_EXERCISE_SKILL_BOUNDED));
+        JsonNode withoutTrustedWeather = isolatedClient.buildChatPayload(new ChatRequest(
+                List.of(),
+                "查询天气后制定运动计划",
+                List.of(),
+                "",
+                ToolAccessPolicy.allowOnly(Set.of("get_weather")),
+                ChatProviderPolicy.AGENT_EXERCISE_SKILL_BOUNDED));
+
+        assertTrue(withTrustedWeather.path("tools").isMissingNode());
+        assertTrue(withTrustedWeather.path("tool_choice").isMissingNode());
+        assertEquals(List.of("get_weather"), toolNames(withoutTrustedWeather));
+    }
+
+    @Test
+    void standardChatKeepsAllRegisteredToolsVisible() {
+        ToolRegistry registry = new ToolRegistry(
+                List.of(
+                        namedTextTool("get_weather"),
+                        namedTextTool("add_todo"),
+                        namedTextTool("generate_image")),
+                objectMapper);
+        ZhipuAiClient standardClient = newClient(HttpClient.newHttpClient(), registry);
+
+        JsonNode payload = standardClient.buildChatPayload(
+                new ChatRequest(List.of(), "普通聊天", List.of()));
+
+        assertEquals(
+                List.of("add_todo", "generate_image", "get_weather"),
+                toolNames(payload));
     }
 
     @Test
@@ -216,7 +265,11 @@ class ZhipuAiClientTest {
         assertEquals(2, payload.path("messages").size());
         assertEquals("system", payload.path("messages").get(0).path("role").asText());
         assertEquals("user", payload.path("messages").get(1).path("role").asText());
+        assertEquals("json_object", payload.path("response_format").path("type").asText());
         String instructions = payload.path("messages").get(0).path("content").asText();
+        assertTrue(instructions.contains("trainingDates"));
+        assertTrue(instructions.contains("sessionDurationMinutesByDate"));
+        assertTrue(instructions.contains("root 只允许 answer、audit"));
         assertTrue(instructions.contains("GET_WEATHER"));
         assertTrue(instructions.contains("THREE_DAYS"));
         assertTrue(instructions.contains("UNQUERIED_FROM"));
@@ -235,7 +288,7 @@ class ZhipuAiClientTest {
         assertTrue(instructions.contains("非训练日活动须标为恢复/日常活动"));
         assertTrue(instructions.contains("输出前检查"));
         assertTrue(instructions.contains("跨章节数字无冲突"));
-        assertTrue(client.synthesisInstructionChars() < 1_308);
+        assertTrue(client.synthesisInstructionChars() < 2_400);
         assertEquals(2_000, payload.path("max_tokens").asInt());
         assertEquals(
                 "天气：未来三日晴到多云\n运动建议：每天步行 30 分钟",
@@ -277,8 +330,10 @@ class ZhipuAiClientTest {
                 List.of(), "制定运动计划", List.of()));
 
         assertEquals(2_000, synthesis.path("max_tokens").asInt());
+        assertEquals("json_object", synthesis.path("response_format").path("type").asText());
         assertTrue(planning.path("max_tokens").isMissingNode());
         assertTrue(skillChat.path("max_tokens").isMissingNode());
+        assertTrue(skillChat.path("response_format").isMissingNode());
     }
 
     @Test
@@ -744,6 +799,38 @@ class ZhipuAiClientTest {
 
     @Test
     @SuppressWarnings({"rawtypes", "unchecked"})
+    void agentExerciseHallucinatedTodoCallIsRejectedWithoutExecution() throws Exception {
+        HttpClient httpClient = mock(HttpClient.class);
+        HttpResponse<String> unauthorizedToolRequest = response(200, """
+                {"choices":[{"message":{"role":"assistant","tool_calls":[
+                  {"id":"todo-1","type":"function","function":{
+                    "name":"add_todo","arguments":"{}"}}
+                ]}}]}
+                """);
+        HttpResponse<String> finalAnswer = response(
+                200, "{\"choices\":[{\"message\":{\"content\":\"运动计划\"}}]}");
+        doReturn(unauthorizedToolRequest, finalAnswer).when(httpClient).send(
+                any(HttpRequest.class), any(HttpResponse.BodyHandler.class));
+        AtomicInteger todoExecutions = new AtomicInteger();
+        ToolRegistry registry = new ToolRegistry(
+                List.of(
+                        namedTextTool("get_weather"),
+                        countingTextTool("add_todo", todoExecutions)),
+                objectMapper);
+        AgentRunMetricsCollector collector = new AgentRunMetricsCollector();
+
+        ChatOutcome outcome = newClient(httpClient, registry).chat(
+                agentExerciseRequest("制定运动计划"), exerciseToolContext(collector));
+
+        assertEquals("运动计划", outcome.text());
+        assertEquals(0, todoExecutions.get());
+        assertEquals(0, collector.snapshot().todoToolCallCount());
+        verify(httpClient, times(2)).send(
+                any(HttpRequest.class), any(HttpResponse.BodyHandler.class));
+    }
+
+    @Test
+    @SuppressWarnings({"rawtypes", "unchecked"})
     void agentExercisePreservesInterruptAndDoesNotFallback() throws Exception {
         HttpClient httpClient = mock(HttpClient.class);
         when(httpClient.send(
@@ -1030,7 +1117,7 @@ class ZhipuAiClientTest {
                 text,
                 List.of(),
                 "",
-                Set.of(),
+                ToolAccessPolicy.allowOnly(Set.of("get_weather")),
                 ChatProviderPolicy.AGENT_EXERCISE_SKILL_BOUNDED);
     }
 
@@ -1088,6 +1175,10 @@ class ZhipuAiClientTest {
     }
 
     private BotTool namedTextTool(String name) {
+        return countingTextTool(name, new AtomicInteger());
+    }
+
+    private BotTool countingTextTool(String name, AtomicInteger executionCount) {
         var schema = objectMapper.createObjectNode()
                 .put("type", "object")
                 .put("additionalProperties", false);
@@ -1100,9 +1191,17 @@ class ZhipuAiClientTest {
 
             @Override
             public ToolResult execute(JsonNode arguments, ToolContext context) {
+                executionCount.incrementAndGet();
                 return ToolResult.text("ok");
             }
         };
+    }
+
+    private List<String> toolNames(JsonNode payload) {
+        return java.util.stream.StreamSupport.stream(
+                        payload.path("tools").spliterator(), false)
+                .map(tool -> tool.path("function").path("name").asText())
+                .toList();
     }
 
 }

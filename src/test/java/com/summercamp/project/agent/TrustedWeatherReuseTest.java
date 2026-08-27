@@ -50,6 +50,36 @@ class TrustedWeatherReuseTest {
     }
 
     @Test
+    void completedWeatherObservationRemainsTrustedAfterCheckpointRestore() {
+        AgentStep weather = weatherStep();
+        AgentStep exercise = step("exercise", AgentAction.RUN_EXERCISE_SKILL, "weather");
+        AgentStep validate = step("validate", AgentAction.VALIDATE, "exercise");
+        AgentStep synthesis = step("synthesis", AgentAction.SYNTHESIZE, "validate");
+        AgentPlan plan = plan(weather, exercise, validate, synthesis);
+        AgentState initial = new AgentState(plan);
+        initial.recordObservation(successfulWeather());
+        initial.recordObservation(new AgentObservation(
+                "exercise",
+                false,
+                "请补充训练资料",
+                Map.of("code", "NEEDS_USER_INPUT", "recoverable", "true")));
+        initial.markSkipped("validate", "waiting dependency");
+        initial.markSkipped("synthesis", "waiting dependency");
+
+        AgentState restored = AgentState.restoreForResume(
+                AgentStateSnapshot.from(initial), "exercise");
+        TrustedWeatherObservationResolver.Decision decision = decision(exercise, plan, restored);
+
+        assertEquals(AgentStepStatus.COMPLETED, restored.statusOf("weather"));
+        assertEquals(AgentStepStatus.PENDING, restored.statusOf("exercise"));
+        assertEquals(AgentStepStatus.PENDING, restored.statusOf("validate"));
+        assertEquals(AgentStepStatus.PENDING, restored.statusOf("synthesis"));
+        assertEquals(successfulWeather(), restored.findObservation("weather").orElseThrow());
+        assertTrue(decision.eligible());
+        assertEquals(TrustedWeatherObservationResolver.Reason.ELIGIBLE, decision.reason());
+    }
+
+    @Test
     void successfulCompletedTransitiveWeatherIsInjectedAndMeasured() {
         stubSkill("exercise-health-advice");
         AgentStep weather = weatherStep();

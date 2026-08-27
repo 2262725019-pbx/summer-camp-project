@@ -14,6 +14,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.summercamp.project.agent.AgentPlan;
 import com.summercamp.project.agent.AgentRunMetrics;
 import com.summercamp.project.agent.AgentRunMetricsCollector;
+import com.summercamp.project.agent.AgentSynthesisResult;
 import com.summercamp.project.agent.LlmAgentPlanner;
 import com.summercamp.project.config.AiChatProperties;
 import com.summercamp.project.speech.WechatAudioConverter;
@@ -140,12 +141,13 @@ class AgentLlmRuntimeResilienceTest {
         HttpClient httpClient = mock(HttpClient.class);
         stubHttp(httpClient, errorResponse(statusCode));
 
-        LlmException failure = assertThrows(
-                LlmException.class,
+        AgentProviderException failure = assertThrows(
+                AgentProviderException.class,
                 () -> client(httpClient, List.of("fallback-model"), Duration.ofSeconds(40))
                         .generatePlan("计划", "只返回 JSON"));
 
         assertTrue(failure.getMessage().contains("PLANNING_NON_RETRYABLE"));
+        assertEquals(AgentProviderFailureCategory.NON_RETRYABLE, failure.category());
         verify(httpClient).send(any(HttpRequest.class), any(HttpResponse.BodyHandler.class));
     }
 
@@ -155,13 +157,14 @@ class AgentLlmRuntimeResilienceTest {
         HttpClient httpClient = mock(HttpClient.class);
         stubHttp(httpClient, new InterruptedException("interrupted"));
 
-        LlmException failure = assertThrows(
-                LlmException.class,
+        AgentProviderException failure = assertThrows(
+                AgentProviderException.class,
                 () -> client(httpClient, List.of("fallback-model"), Duration.ofSeconds(40))
                         .generatePlan("计划", "只返回 JSON"));
 
         assertTrue(Thread.currentThread().isInterrupted());
         assertTrue(failure.getMessage().contains("PLANNING_INTERRUPTED"));
+        assertEquals(AgentProviderFailureCategory.INTERRUPTED, failure.category());
         verify(httpClient).send(any(HttpRequest.class), any(HttpResponse.BodyHandler.class));
     }
 
@@ -174,12 +177,13 @@ class AgentLlmRuntimeResilienceTest {
                 new HttpTimeoutException("primary timeout"),
                 new HttpTimeoutException("fallback timeout"));
 
-        LlmException failure = assertThrows(
-                LlmException.class,
+        AgentProviderException failure = assertThrows(
+                AgentProviderException.class,
                 () -> client(httpClient, List.of("fallback-1", "fallback-2"), Duration.ofSeconds(40))
                         .generatePlan("计划", "只返回 JSON"));
 
         assertTrue(failure.getMessage().contains("PLANNING_TIMEOUT"));
+        assertEquals(AgentProviderFailureCategory.TIMEOUT, failure.category());
         verify(httpClient, times(2)).send(any(HttpRequest.class), any(HttpResponse.BodyHandler.class));
     }
 
@@ -243,17 +247,18 @@ class AgentLlmRuntimeResilienceTest {
     @SuppressWarnings({"rawtypes", "unchecked"})
     void synthesisTransientFailureFallsBackWithToolIsolatedPayload() throws Exception {
         HttpClient httpClient = mock(HttpClient.class);
-        stubHttp(httpClient, errorResponse(503), successResponse("最终健康计划"));
+        stubHttp(httpClient, errorResponse(503), successResponse(
+                "{\"answer\":\"最终健康计划\",\"audit\":{}}"));
         ZhipuAiClient client = client(httpClient, List.of("fallback-model"), Duration.ofSeconds(40));
 
         AgentRunMetricsCollector collector = new AgentRunMetricsCollector();
-        String result = client.synthesize(
+        AgentSynthesisResult result = client.synthesize(
                 "制定健康计划",
                 "Observation 安全上下文",
                 AgentRunMetrics.observe(collector)
                         .withLlmPhase(AgentRunMetrics.LlmPhase.SYNTHESIS));
 
-        assertEquals("最终健康计划", result);
+        assertEquals("最终健康计划", result.answer());
         assertEquals(2, collector.snapshot().llmRequestCount());
         assertEquals(2, collector.snapshot().synthesisLlmRequestCount());
         assertEquals(
@@ -267,6 +272,8 @@ class AgentLlmRuntimeResilienceTest {
         assertTrue(payloads.stream().allMatch(node -> node.path("tools").isMissingNode()));
         assertTrue(payloads.stream().allMatch(node -> node.path("tool_choice").isMissingNode()));
         assertTrue(payloads.stream().allMatch(node -> node.path("max_tokens").asInt() == 2_000));
+        assertTrue(payloads.stream().allMatch(node ->
+                "json_object".equals(node.path("response_format").path("type").asText())));
     }
 
     @Test

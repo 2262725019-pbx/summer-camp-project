@@ -2,8 +2,10 @@ package com.summercamp.project.agent;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -33,6 +35,9 @@ public final class LlmAgentPlanner implements AgentPlanner {
             2. 根据 Goal 自主选择必要能力，不要为了凑数量规划无关能力。
                Goal 明确要求运动时必须包含 RUN_EXERCISE_SKILL；明确要求饮食时必须包含
                RUN_MEAL_SKILL；明确要求天气时必须包含 GET_WEATHER。作息可在最终汇总中整合。
+               Goal 明确要求“未来N天”“接下来N天”或等价的明确相对日期规划时，必须包含
+               GET_DATETIME，用于确定计划起始日期、结束日期和星期；不得凭模型内部时间知识
+               计算当前日期。GET_DATETIME 应在依赖日期范围的业务步骤之前完成。
             3. dependsOn 中只能填写其他步骤的 step id；依赖必须存在、不得自依赖、不得形成环。
             4. 必须生成完整闭环：所有业务步骤 → 一个 VALIDATE → 一个 SYNTHESIZE。
                VALIDATE 必须直接或间接依赖全部业务分支；所有业务步骤必须位于 VALIDATE 前，
@@ -73,12 +78,22 @@ public final class LlmAgentPlanner implements AgentPlanner {
             """;
 
     private static final Logger LOGGER = LoggerFactory.getLogger(LlmAgentPlanner.class);
-    private static final int MAX_REPAIR_ERROR_CHARS = 1_200;
+    private static final int MAX_REPAIR_ISSUE_CHARS = 1_200;
+    private static final List<GoalRequirement> REQUIRED_ACTION_ORDER = List.of(
+            GoalRequirement.TEMPORAL,
+            GoalRequirement.WEATHER,
+            GoalRequirement.EXERCISE,
+            GoalRequirement.MEAL
+    );
 
     private final AgentPlanningClient planningClient;
     private final AgentPlanJsonParser jsonParser;
     private final AgentPlanValidator validator;
     private final GoalCoverageValidator coverageValidator;
+    private final GoalRequirementExtractor requirementExtractor;
+    private final AgentPlanClosureNormalizer closureNormalizer;
+    private final DeterministicHealthAgentPlanFactory deterministicPlanFactory;
+    private final AgentTransientFailureClassifier transientFailureClassifier;
 
     @Autowired
     public LlmAgentPlanner(AgentPlanningClient planningClient, ObjectMapper objectMapper) {
@@ -86,7 +101,10 @@ public final class LlmAgentPlanner implements AgentPlanner {
                 planningClient,
                 new AgentPlanJsonParser(objectMapper),
                 new AgentPlanValidator(),
-                new GoalCoverageValidator()
+                new GoalCoverageValidator(),
+                new AgentPlanClosureNormalizer(),
+                new DeterministicHealthAgentPlanFactory(),
+                new AgentTransientFailureClassifier()
         );
     }
 
@@ -96,11 +114,37 @@ public final class LlmAgentPlanner implements AgentPlanner {
             AgentPlanValidator validator,
             GoalCoverageValidator coverageValidator
     ) {
+        this(
+                planningClient,
+                jsonParser,
+                validator,
+                coverageValidator,
+                new AgentPlanClosureNormalizer(),
+                new DeterministicHealthAgentPlanFactory(),
+                new AgentTransientFailureClassifier());
+    }
+
+    LlmAgentPlanner(
+            AgentPlanningClient planningClient,
+            AgentPlanJsonParser jsonParser,
+            AgentPlanValidator validator,
+            GoalCoverageValidator coverageValidator,
+            AgentPlanClosureNormalizer closureNormalizer,
+            DeterministicHealthAgentPlanFactory deterministicPlanFactory,
+            AgentTransientFailureClassifier transientFailureClassifier
+    ) {
         this.planningClient = Objects.requireNonNull(planningClient, "planningClient must not be null");
         this.jsonParser = Objects.requireNonNull(jsonParser, "jsonParser must not be null");
         this.validator = Objects.requireNonNull(validator, "validator must not be null");
         this.coverageValidator = Objects.requireNonNull(
                 coverageValidator, "coverageValidator must not be null");
+        this.closureNormalizer = Objects.requireNonNull(
+                closureNormalizer, "closureNormalizer must not be null");
+        this.deterministicPlanFactory = Objects.requireNonNull(
+                deterministicPlanFactory, "deterministicPlanFactory must not be null");
+        this.transientFailureClassifier = Objects.requireNonNull(
+                transientFailureClassifier, "transientFailureClassifier must not be null");
+        this.requirementExtractor = new GoalRequirementExtractor();
     }
 
     @Override
@@ -127,7 +171,15 @@ public final class LlmAgentPlanner implements AgentPlanner {
                         instructions,
                         metrics.withLlmPhase(AgentRunMetrics.LlmPhase.PLANNING));
             } catch (RuntimeException exception) {
-                LOGGER.error("Agent 规划失败");
+                AgentFallbackReason reason = transientFailureClassifier.classify(exception)
+                        .orElse(null);
+                if (reason != null) {
+                    AgentPlan fallback = deterministicPlan(requestedGoal, metrics, reason);
+                    if (fallback != null) {
+                        return fallback;
+                    }
+                }
+                LOGGER.error("Agent 规划失败：deterministicFallback=false");
                 throw new AgentPlanningException("Agent planning client failed", exception);
             }
 
@@ -136,22 +188,33 @@ public final class LlmAgentPlanner implements AgentPlanner {
                 LOGGER.info("Agent 规划完成：steps={}", result.plan().steps().size());
                 return result.plan();
             }
-            List<AgentPlanErrorCode> errorCodes = AgentPlanErrorClassifier.classify(result.errors());
+            AgentPlan normalized = normalizeClosure(result, requestedGoal, metrics);
+            if (normalized != null) {
+                return normalized;
+            }
+            List<AgentPlanErrorCode> errorCodes = result.issues().stream()
+                    .map(AgentPlanValidationIssue::code)
+                    .toList();
             LOGGER.warn(
                     "Agent 计划无效：attempt={}, errorCount={}, errors={}",
                     attempt + 1,
-                    result.errors().size(),
+                    result.issues().size(),
                     errorCodes
             );
             if (attempt < MAX_REPAIR_ATTEMPTS) {
                 LOGGER.warn("Agent 计划第一次校验失败，尝试修复");
-                instructions = repairInstructions(result.errors());
+                instructions = repairInstructions(result.issues(), requestedGoal);
                 continue;
             }
 
-            LOGGER.error("Agent 规划失败");
-            throw new AgentPlanningException(
-                    "Agent plan is invalid after one repair attempt: " + summarizeErrors(result.errors()));
+            AgentPlan fallback = deterministicPlan(
+                    requestedGoal, metrics, AgentFallbackReason.INVALID_PLAN_AFTER_REPAIR);
+            if (fallback != null) {
+                return fallback;
+            }
+            LOGGER.error("Agent 规划失败：deterministicFallback=false");
+            throw new AgentPlanningException("Agent plan is invalid after one repair attempt: "
+                    + summarizeIssues(result.issues()));
         }
         throw new AgentPlanningException("Agent planning failed");
     }
@@ -161,42 +224,136 @@ public final class LlmAgentPlanner implements AgentPlanner {
         try {
             parsedPlan = jsonParser.parse(rawPlan);
         } catch (AgentPlanParseException exception) {
-            return AttemptResult.invalid(List.of(exception.getMessage()));
+            return AttemptResult.invalid(null, List.of(issue(
+                    AgentPlanValidationSource.JSON_PARSER,
+                    exception.getMessage())));
         }
 
-        List<String> errors = new ArrayList<>(validator.validate(parsedPlan).errors());
-        errors.addAll(coverageValidator.validate(requestedGoal, parsedPlan).errors());
         AgentPlan canonicalPlan = new AgentPlan(requestedGoal, parsedPlan.steps());
-        return errors.isEmpty() ? AttemptResult.valid(canonicalPlan) : AttemptResult.invalid(errors);
+        return validateCandidate(canonicalPlan, requestedGoal);
     }
 
-    private String repairInstructions(List<String> errors) {
+    private AttemptResult validateCandidate(AgentPlan candidate, String requestedGoal) {
+        List<AgentPlanValidationIssue> issues = new ArrayList<>();
+        issues.addAll(issues(
+                AgentPlanValidationSource.PLAN_VALIDATOR,
+                validator.validate(candidate).errors()));
+        issues.addAll(issues(
+                AgentPlanValidationSource.GOAL_COVERAGE_VALIDATOR,
+                coverageValidator.validate(requestedGoal, candidate).errors()));
+        return issues.isEmpty()
+                ? AttemptResult.valid(candidate)
+                : AttemptResult.invalid(candidate, issues);
+    }
+
+    private AgentPlan normalizeClosure(
+            AttemptResult result,
+            String requestedGoal,
+            AgentRunMetrics metrics
+    ) {
+        return closureNormalizer.normalize(result.candidatePlan(), result.issues())
+                .map(candidate -> validateCandidate(candidate, requestedGoal))
+                .filter(normalized -> normalized.plan() != null)
+                .map(normalized -> {
+                    metrics.recordPlannerClosureNormalized();
+                    LOGGER.info("Agent planner closure normalized");
+                    return normalized.plan();
+                })
+                .orElse(null);
+    }
+
+    private AgentPlan deterministicPlan(
+            String requestedGoal,
+            AgentRunMetrics metrics,
+            AgentFallbackReason reason
+    ) {
+        AgentPlan candidate = deterministicPlanFactory.create(requestedGoal).orElse(null);
+        if (candidate == null) {
+            return null;
+        }
+        AttemptResult validation = validateCandidate(candidate, requestedGoal);
+        if (validation.plan() == null) {
+            throw new AgentPlanningException(
+                    "Deterministic Agent plan failed validation: "
+                            + summarizeIssues(validation.issues()));
+        }
+        metrics.recordDeterministicPlannerFallback(reason);
+        LOGGER.warn("Agent planner deterministic fallback: reason={}", reason);
+        return validation.plan();
+    }
+
+    private List<AgentPlanValidationIssue> issues(
+            AgentPlanValidationSource source,
+            List<String> errors
+    ) {
+        return errors.stream().map(error -> issue(source, error)).toList();
+    }
+
+    private AgentPlanValidationIssue issue(AgentPlanValidationSource source, String error) {
+        return new AgentPlanValidationIssue(source, AgentPlanErrorClassifier.classify(error));
+    }
+
+    private String repairInstructions(
+            List<AgentPlanValidationIssue> issues,
+            String requestedGoal
+    ) {
         return INITIAL_INSTRUCTIONS + """
 
                 上一次输出未通过结构解析或计划校验。请依据下面的结构化错误修复计划。
                 goal 字段保持非空即可，应用会使用 user 消息中的原始 Goal。只返回修正后的 JSON object。
-                错误：
-                """ + summarizeErrors(errors);
+                REQUIRED_ACTIONS_FOR_THIS_GOAL:
+                """ + requiredActionSummary(requestedGoal) + """
+                CLOSED_LOOP_REQUIREMENTS:
+                EXACTLY_ONE_VALIDATE
+                EXACTLY_ONE_FINAL_SYNTHESIZE
+                VALIDATE_COVERS_ALL_BUSINESS_BRANCHES
+                VALIDATION_ISSUES:
+                """ + summarizeIssues(issues);
     }
 
-    private String summarizeErrors(List<String> errors) {
-        String summary = String.join("; ", errors);
-        return summary.length() <= MAX_REPAIR_ERROR_CHARS
+    private String requiredActionSummary(String requestedGoal) {
+        Set<GoalRequirement> requirements = requirementExtractor.extract(requestedGoal);
+        LinkedHashSet<AgentAction> requiredActions = new LinkedHashSet<>();
+        REQUIRED_ACTION_ORDER.stream()
+                .filter(requirements::contains)
+                .map(GoalRequirement::requiredAction)
+                .filter(Objects::nonNull)
+                .forEach(requiredActions::add);
+        if (requiredActions.isEmpty()) {
+            return "NONE\n";
+        }
+        return requiredActions.stream()
+                .map(Enum::name)
+                .collect(java.util.stream.Collectors.joining("\n", "", "\n"));
+    }
+
+    private String summarizeIssues(List<AgentPlanValidationIssue> issues) {
+        String summary = issues.stream()
+                .map(AgentPlanValidationIssue::safeLabel)
+                .collect(java.util.stream.Collectors.joining("; "));
+        return summary.length() <= MAX_REPAIR_ISSUE_CHARS
                 ? summary
-                : summary.substring(0, MAX_REPAIR_ERROR_CHARS) + "…";
+                : summary.substring(0, MAX_REPAIR_ISSUE_CHARS) + "…";
     }
 
-    private record AttemptResult(AgentPlan plan, List<String> errors) {
+    private record AttemptResult(
+            AgentPlan plan,
+            AgentPlan candidatePlan,
+            List<AgentPlanValidationIssue> issues
+    ) {
         private AttemptResult {
-            errors = List.copyOf(errors);
+            issues = List.copyOf(issues);
         }
 
         private static AttemptResult valid(AgentPlan plan) {
-            return new AttemptResult(plan, List.of());
+            return new AttemptResult(plan, plan, List.of());
         }
 
-        private static AttemptResult invalid(List<String> errors) {
-            return new AttemptResult(null, errors);
+        private static AttemptResult invalid(
+                AgentPlan candidatePlan,
+                List<AgentPlanValidationIssue> issues
+        ) {
+            return new AttemptResult(null, candidatePlan, issues);
         }
     }
 }

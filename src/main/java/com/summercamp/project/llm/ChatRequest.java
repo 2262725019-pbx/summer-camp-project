@@ -1,14 +1,14 @@
 package com.summercamp.project.llm;
 
+import com.summercamp.project.tool.ToolAccessPolicy;
 import java.util.List;
-import java.util.Set;
 
 public record ChatRequest(
         List<ChatMessage> history,
         String text,
         List<ImageInput> images,
         String groundingContext,
-        Set<String> disabledTools,
+        ToolAccessPolicy toolAccessPolicy,
         ChatProviderPolicy providerPolicy) {
 
     public ChatRequest {
@@ -16,7 +16,9 @@ public record ChatRequest(
         images = List.copyOf(images);
         text = text == null ? "" : text;
         groundingContext = groundingContext == null ? "" : groundingContext;
-        disabledTools = disabledTools == null ? Set.of() : Set.copyOf(disabledTools);
+        toolAccessPolicy = toolAccessPolicy == null
+                ? ToolAccessPolicy.unrestricted()
+                : toolAccessPolicy;
         providerPolicy = providerPolicy == null ? ChatProviderPolicy.STANDARD : providerPolicy;
     }
 
@@ -25,14 +27,14 @@ public record ChatRequest(
             String text,
             List<ImageInput> images,
             String groundingContext,
-            Set<String> disabledTools
+            ToolAccessPolicy toolAccessPolicy
     ) {
         this(
                 history,
                 text,
                 images,
                 groundingContext,
-                disabledTools,
+                toolAccessPolicy,
                 ChatProviderPolicy.STANDARD);
     }
 
@@ -47,11 +49,17 @@ public record ChatRequest(
                 text,
                 images,
                 groundingContext,
-                Set.of(),
+                ToolAccessPolicy.unrestricted(),
                 ChatProviderPolicy.STANDARD);
     }
 
     public ChatRequest(List<ChatMessage> history, String text, List<ImageInput> images) {
-        this(history, text, images, "", Set.of(), ChatProviderPolicy.STANDARD);
+        this(
+                history,
+                text,
+                images,
+                "",
+                ToolAccessPolicy.unrestricted(),
+                ChatProviderPolicy.STANDARD);
     }
 }

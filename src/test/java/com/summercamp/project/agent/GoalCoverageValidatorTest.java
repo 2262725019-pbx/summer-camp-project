@@ -40,6 +40,32 @@ class GoalCoverageValidatorTest {
         ).valid());
     }
 
+    @Test
+    void requiresDatetimeOnlyForExplicitRelativeDayPlanning() {
+        AgentPlan withoutDatetime = plan(
+                AgentAction.RETRIEVE_KNOWLEDGE,
+                AgentAction.RUN_EXERCISE_SKILL,
+                AgentAction.CREATE_TODO,
+                AgentAction.VALIDATE,
+                AgentAction.SYNTHESIZE
+        );
+
+        AgentPlanValidationResult temporal = validator.validate(
+                "未来7天健康生活规划", withoutDatetime);
+
+        assertEquals(
+                List.of(GoalCoverageValidator.MISSING_REQUIRED_DATETIME_ACTION),
+                temporal.errors()
+        );
+        assertTrue(validator.validate("给我一个增肌饮食建议", plan(
+                AgentAction.RUN_MEAL_SKILL,
+                AgentAction.RETRIEVE_KNOWLEDGE,
+                AgentAction.CALCULATE,
+                AgentAction.VALIDATE,
+                AgentAction.SYNTHESIZE
+        )).valid());
+    }
+
     private AgentPlan plan(AgentAction... actions) {
         List<AgentStep> steps = java.util.stream.IntStream.range(0, actions.length)
                 .mapToObj(index -> new AgentStep(

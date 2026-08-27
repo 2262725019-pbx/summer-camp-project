@@ -87,6 +87,20 @@ class ToolRegistryTest {
         assertTrue(extraArgument.path("error").asText().contains("不允许的工具参数"));
     }
 
+    @Test
+    void requestPolicyRejectsRegisteredButUnauthorizedTool() throws Exception {
+        ToolRegistry.Invocation invocation = registry.invoke(
+                "calculate",
+                "{\"left\":1,\"operator\":\"ADD\",\"right\":2}",
+                ToolContext.anonymous(),
+                ToolAccessPolicy.allowOnly(java.util.Set.of("get_weather")));
+        JsonNode result = objectMapper.readTree(invocation.modelContent());
+
+        assertFalse(invocation.success());
+        assertFalse(result.path("success").asBoolean());
+        assertTrue(result.path("error").asText().contains("不允许调用工具"));
+    }
+
     private JsonNode invoke(String name, String arguments) throws Exception {
         return objectMapper.readTree(
                 registry.invoke(name, arguments, ToolContext.anonymous()).modelContent());

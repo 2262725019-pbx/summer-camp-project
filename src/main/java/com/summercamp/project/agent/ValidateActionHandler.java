@@ -20,6 +20,8 @@ public final class ValidateActionHandler implements AgentActionHandler {
             "MISSING_REQUIRED_MEAL_RESULT";
     public static final String MISSING_REQUIRED_WEATHER_RESULT =
             "MISSING_REQUIRED_WEATHER_RESULT";
+    public static final String MISSING_REQUIRED_DATETIME_RESULT =
+            "MISSING_REQUIRED_DATETIME_RESULT";
 
     private static final Set<AgentAction> BUSINESS_ACTIONS = EnumSet.of(
             AgentAction.GET_DATETIME,
@@ -108,6 +110,7 @@ public final class ValidateActionHandler implements AgentActionHandler {
     ) {
         Set<GoalRequirement> requirements = requirementExtractor.extract(context.originalGoal());
         for (GoalRequirement requirement : List.of(
+                GoalRequirement.TEMPORAL,
                 GoalRequirement.EXERCISE,
                 GoalRequirement.MEAL,
                 GoalRequirement.WEATHER)) {
@@ -149,6 +152,7 @@ public final class ValidateActionHandler implements AgentActionHandler {
 
     private String missingResultCode(GoalRequirement requirement) {
         return switch (requirement) {
+            case TEMPORAL -> MISSING_REQUIRED_DATETIME_RESULT;
             case EXERCISE -> MISSING_REQUIRED_EXERCISE_RESULT;
             case MEAL -> MISSING_REQUIRED_MEAL_RESULT;
             case WEATHER -> MISSING_REQUIRED_WEATHER_RESULT;

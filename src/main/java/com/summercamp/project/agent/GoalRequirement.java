@@ -1,6 +1,7 @@
 package com.summercamp.project.agent;
 
 public enum GoalRequirement {
+    TEMPORAL(AgentAction.GET_DATETIME),
     WEATHER(AgentAction.GET_WEATHER),
     EXERCISE(AgentAction.RUN_EXERCISE_SKILL),
     MEAL(AgentAction.RUN_MEAL_SKILL),

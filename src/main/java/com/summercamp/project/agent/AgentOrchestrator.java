@@ -1,5 +1,7 @@
 package com.summercamp.project.agent;
 
+import com.summercamp.project.llm.ChatMessage;
+import java.util.List;
 import java.util.Objects;
 import java.util.function.Supplier;
 import org.slf4j.Logger;
@@ -9,6 +11,7 @@ import org.springframework.stereotype.Component;
 
 @Component
 public final class AgentOrchestrator {
+    public static final int MAX_RESUME_ATTEMPTS = 3;
     private static final String SAFE_FAILURE_REPLY = "未能完成本次健康生活规划，请稍后重试或调整目标。";
     private static final Logger LOGGER = LoggerFactory.getLogger(AgentOrchestrator.class);
 
@@ -82,6 +85,72 @@ public final class AgentOrchestrator {
         }
         metrics.recordExecutorDuration(System.nanoTime() - executorStartedAt);
 
+        return finish(resultFromState(plan, state), metrics, runStartedAt);
+    }
+
+    public AgentRunResult resume(
+            AgentRunCheckpoint checkpoint,
+            String userId,
+            AgentResumeInput input,
+            List<ChatMessage> history,
+            boolean voiceMessage
+    ) {
+        return resume(
+                checkpoint,
+                userId,
+                input,
+                history,
+                voiceMessage,
+                createCollector());
+    }
+
+    AgentRunResult resume(
+            AgentRunCheckpoint checkpoint,
+            String userId,
+            AgentResumeInput input,
+            List<ChatMessage> history,
+            boolean voiceMessage,
+            AgentRunMetricsCollector collector
+    ) {
+        Objects.requireNonNull(checkpoint, "checkpoint must not be null");
+        Objects.requireNonNull(input, "input must not be null");
+        if (input.attempt() != checkpoint.resumeAttemptCount() + 1
+                || input.attempt() > MAX_RESUME_ATTEMPTS) {
+            throw new IllegalArgumentException("resume attempt does not match checkpoint");
+        }
+        if (!checkpoint.waitingStepId().equals(input.waitingStepId())) {
+            throw new IllegalArgumentException("resume input does not match waiting step");
+        }
+
+        LOGGER.info("Agent resume start: attempt={}", input.attempt());
+        long runStartedAt = System.nanoTime();
+        AgentRunMetrics metrics = AgentRunMetrics.observe(
+                Objects.requireNonNull(collector, "collector must not be null"));
+        metrics.recordPlanStepCount(checkpoint.plan().steps().size());
+        AgentState state;
+        long executorStartedAt = System.nanoTime();
+        try {
+            state = executor.resume(
+                    userId,
+                    history == null ? List.of() : List.copyOf(history),
+                    voiceMessage,
+                    checkpoint,
+                    input,
+                    metrics);
+        } catch (RuntimeException exception) {
+            metrics.recordExecutorDuration(System.nanoTime() - executorStartedAt);
+            return finish(new AgentRunResult(
+                    AgentRunResult.Status.FAILED,
+                    SAFE_FAILURE_REPLY,
+                    checkpoint.plan(),
+                    null), metrics, runStartedAt);
+        }
+        metrics.recordExecutorDuration(System.nanoTime() - executorStartedAt);
+        return finish(resultFromState(checkpoint.plan(), state), metrics, runStartedAt);
+    }
+
+    private AgentRunResult resultFromState(AgentPlan plan, AgentState state) {
+
         AgentObservation waiting = plan.steps().stream()
                 .map(step -> state.findObservation(step.id()).orElse(null))
                 .filter(Objects::nonNull)
@@ -89,12 +158,12 @@ public final class AgentOrchestrator {
                 .findFirst()
                 .orElse(null);
         if (waiting != null) {
-            return finish(new AgentRunResult(
+            return new AgentRunResult(
                     AgentRunResult.Status.NEEDS_USER_INPUT,
                     waiting.summary().isBlank() ? "请补充必要信息后继续。" : waiting.summary(),
                     plan,
                     state
-            ), metrics, runStartedAt);
+            );
         }
 
         AgentStep synthesis = plan.steps().stream()
@@ -104,14 +173,12 @@ public final class AgentOrchestrator {
         if (synthesis != null && state.statusOf(synthesis.id()) == AgentStepStatus.COMPLETED) {
             AgentObservation result = state.findObservation(synthesis.id()).orElse(null);
             if (result != null && result.success()) {
-                return finish(new AgentRunResult(
-                        AgentRunResult.Status.COMPLETED, result.summary(), plan, state),
-                        metrics, runStartedAt);
+                return new AgentRunResult(
+                        AgentRunResult.Status.COMPLETED, result.summary(), plan, state);
             }
         }
-        return finish(new AgentRunResult(
-                AgentRunResult.Status.FAILED, SAFE_FAILURE_REPLY, plan, state),
-                metrics, runStartedAt);
+        return new AgentRunResult(
+                AgentRunResult.Status.FAILED, SAFE_FAILURE_REPLY, plan, state);
     }
 
     private AgentRunResult finish(
@@ -138,7 +205,13 @@ public final class AgentOrchestrator {
                         + "synthesisOriginalGoalChars={}, synthesisDatetimeChars={}, "
                         + "synthesisWeatherChars={}, synthesisExerciseChars={}, "
                         + "synthesisMealChars={}, synthesisRagChars={}, synthesisTodoChars={}, "
-                        + "synthesisValidateChars={}, synthesisCalculateChars={}",
+                        + "synthesisValidateChars={}, synthesisCalculateChars={}, "
+                        + "finalValidationAttempts={}, finalValidationFailures={}, "
+                        + "synthesisRepairTriggered={}, synthesisRepairSucceeded={}, "
+                        + "synthesisRepairInstructionChars={}, plannerClosureNormalized={}, "
+                        + "deterministicPlannerFallback={}, deterministicPlannerReason={}, "
+                        + "deterministicExerciseFallback={}, deterministicExerciseReason={}, "
+                        + "deterministicSynthesisFallback={}, deterministicSynthesisReason={}",
                 result.status(),
                 snapshot.agentRunDurationMs(),
                 snapshot.plannerDurationMs(),
@@ -171,7 +244,25 @@ public final class AgentOrchestrator {
                 snapshot.synthesisRagChars(),
                 snapshot.synthesisTodoChars(),
                 snapshot.synthesisValidateChars(),
-                snapshot.synthesisCalculateChars());
+                snapshot.synthesisCalculateChars(),
+                snapshot.finalValidationAttemptCount(),
+                snapshot.finalValidationFailureCount(),
+                snapshot.synthesisRepairTriggeredCount(),
+                snapshot.synthesisRepairSucceededCount(),
+                snapshot.synthesisRepairInstructionChars(),
+                snapshot.plannerClosureNormalizedCount(),
+                snapshot.deterministicPlannerFallbackCount(),
+                snapshot.deterministicPlannerFallbackReason(),
+                snapshot.deterministicExerciseFallbackCount(),
+                snapshot.deterministicExerciseFallbackReason(),
+                snapshot.deterministicSynthesisFallbackCount(),
+                snapshot.deterministicSynthesisFallbackReason());
+        if (snapshot.agentResumeCount() > 0) {
+            LOGGER.info(
+                    "Agent resume: plannerCalled=false, reusedCompletedSteps={}, executedSteps={}",
+                    snapshot.reusedCompletedStepCount(),
+                    snapshot.executedAfterResumeStepCount());
+        }
         return result;
     }
 

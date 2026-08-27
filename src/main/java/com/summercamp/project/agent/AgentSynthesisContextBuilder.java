@@ -40,13 +40,11 @@ public final class AgentSynthesisContextBuilder {
     private static final Pattern TRAINING_DURATION = Pattern.compile(
             "每次(?:训练)?\\s*[:：]?\\s*(\\d{1,3})\\s*分钟"
     );
-    private static final Pattern PLAN_DAYS = Pattern.compile(
-            "(?:未来|接下来)\\s*(\\d{1,2}|七)\\s*天"
-    );
     private static final Pattern ISO_DATE = Pattern.compile(
             "(?<!\\d)(20\\d{2}-\\d{2}-\\d{2})(?!\\d)"
     );
     private static final List<GoalRequirement> REQUIREMENT_ORDER = List.of(
+            GoalRequirement.TEMPORAL,
             GoalRequirement.EXERCISE,
             GoalRequirement.MEAL,
             GoalRequirement.WEATHER,
@@ -243,11 +241,6 @@ public final class AgentSynthesisContextBuilder {
                 : null;
         List<String> dateLabels = dateLabels(startDate, endDate);
         LocalDate observedThrough = lastObservedWeatherDate(plan, state);
-        if (observedThrough == null
-                && startDate != null
-                && "THREE_DAYS".equals(weatherScope(plan, state))) {
-            observedThrough = startDate.plusDays(2);
-        }
         LocalDate unqueriedFrom = observedThrough != null
                 && endDate != null
                 && observedThrough.isBefore(endDate)
@@ -274,13 +267,7 @@ public final class AgentSynthesisContextBuilder {
     }
 
     private Integer planDays(String originalGoal) {
-        Matcher matcher = PLAN_DAYS.matcher(originalGoal);
-        if (!matcher.find()) {
-            return null;
-        }
-        String value = matcher.group(1);
-        int days = "七".equals(value) ? 7 : Integer.parseInt(value);
-        return days >= 1 && days <= 31 ? days : null;
+        return requirementExtractor.explicitPlanDays(originalGoal);
     }
 
     private LocalDate firstObservedDate(

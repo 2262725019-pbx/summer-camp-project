@@ -28,6 +28,55 @@ public final class AgentState implements AgentStateView {
         plan.steps().forEach(step -> statusesByStepId.put(step.id(), AgentStepStatus.PENDING));
     }
 
+    public static AgentState restoreForResume(
+            AgentStateSnapshot snapshot,
+            String waitingStepId
+    ) {
+        Objects.requireNonNull(snapshot, "snapshot must not be null");
+        if (waitingStepId == null || waitingStepId.isBlank()) {
+            throw new IllegalArgumentException("waitingStepId must not be blank");
+        }
+        AgentPlan plan = snapshot.plan();
+        AgentStep waitingStep = plan.steps().stream()
+                .filter(step -> waitingStepId.equals(step.id()))
+                .findFirst()
+                .orElseThrow(() -> new IllegalArgumentException("waiting step is not in plan"));
+        if (snapshot.statusOf(waitingStepId) != AgentStepStatus.FAILED
+                || snapshot.findObservation(waitingStepId)
+                .filter(AgentRunCheckpoint::needsUserInput)
+                .isEmpty()) {
+            throw new IllegalArgumentException("waiting step is not recoverable");
+        }
+        long waitingCount = snapshot.observations().stream()
+                .filter(AgentRunCheckpoint::needsUserInput)
+                .count();
+        if (waitingCount != 1) {
+            throw new IllegalArgumentException("checkpoint must contain exactly one waiting step");
+        }
+        if (snapshot.statuses().values().stream()
+                .anyMatch(status -> status == AgentStepStatus.RUNNING
+                        || status == AgentStepStatus.PENDING)) {
+            throw new IllegalArgumentException("checkpoint contains non-terminal state");
+        }
+
+        AgentState restored = new AgentState(plan);
+        for (AgentStep step : plan.steps()) {
+            AgentStepStatus status = snapshot.statusOf(step.id());
+            boolean reset = step.id().equals(waitingStep.id())
+                    || (status == AgentStepStatus.SKIPPED
+                    && AgentRunCheckpoint.dependsTransitivelyOn(step, waitingStepId, plan));
+            if (reset) {
+                continue;
+            }
+            AgentObservation observation = snapshot.findObservation(step.id())
+                    .orElseThrow(() -> new IllegalArgumentException(
+                            "terminal checkpoint step has no observation: " + step.id()));
+            restored.observationsByStepId.put(step.id(), observation);
+            restored.statusesByStepId.put(step.id(), status);
+        }
+        return restored;
+    }
+
     public String goal() {
         return goal;
     }

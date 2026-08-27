@@ -12,6 +12,8 @@ public final class GoalCoverageValidator {
             "MISSING_REQUIRED_MEAL_ACTION";
     public static final String MISSING_REQUIRED_WEATHER_ACTION =
             "MISSING_REQUIRED_WEATHER_ACTION";
+    public static final String MISSING_REQUIRED_DATETIME_ACTION =
+            "MISSING_REQUIRED_DATETIME_ACTION";
 
     private final GoalRequirementExtractor requirementExtractor;
 
@@ -45,6 +47,7 @@ public final class GoalCoverageValidator {
 
     private String missingActionCode(GoalRequirement requirement) {
         return switch (requirement) {
+            case TEMPORAL -> MISSING_REQUIRED_DATETIME_ACTION;
             case EXERCISE -> MISSING_REQUIRED_EXERCISE_ACTION;
             case MEAL -> MISSING_REQUIRED_MEAL_ACTION;
             case WEATHER -> MISSING_REQUIRED_WEATHER_ACTION;

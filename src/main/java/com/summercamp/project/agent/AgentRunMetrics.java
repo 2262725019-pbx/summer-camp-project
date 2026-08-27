@@ -71,6 +71,14 @@ public final class AgentRunMetrics {
         safely(AgentRunMetricsCollector::recordSkippedStep);
     }
 
+    public void recordAgentResume(long attempt, long reusedCompletedSteps) {
+        safely(current -> current.recordAgentResume(attempt, reusedCompletedSteps));
+    }
+
+    public void recordExecutedAfterResumeStep() {
+        safely(AgentRunMetricsCollector::recordExecutedAfterResumeStep);
+    }
+
     public void recordSynthesisDuration(long nanos) {
         safely(current -> current.recordSynthesisDuration(nanos));
     }
@@ -85,6 +93,34 @@ public final class AgentRunMetrics {
 
     public void recordSynthesisInstructionChars(long chars) {
         safely(current -> current.recordSynthesisInstructionChars(chars));
+    }
+
+    public void recordFinalValidationAttempt(boolean valid) {
+        safely(current -> current.recordFinalValidationAttempt(valid));
+    }
+
+    public void recordSynthesisRepairTriggered(long instructionChars) {
+        safely(current -> current.recordSynthesisRepairTriggered(instructionChars));
+    }
+
+    public void recordSynthesisRepairSucceeded() {
+        safely(AgentRunMetricsCollector::recordSynthesisRepairSucceeded);
+    }
+
+    public void recordPlannerClosureNormalized() {
+        safely(AgentRunMetricsCollector::recordPlannerClosureNormalized);
+    }
+
+    public void recordDeterministicPlannerFallback(AgentFallbackReason reason) {
+        safely(current -> current.recordDeterministicPlannerFallback(reason));
+    }
+
+    public void recordDeterministicExerciseFallback(AgentFallbackReason reason) {
+        safely(current -> current.recordDeterministicExerciseFallback(reason));
+    }
+
+    public void recordDeterministicSynthesisFallback(AgentFallbackReason reason) {
+        safely(current -> current.recordDeterministicSynthesisFallback(reason));
     }
 
     public void recordPlannerInputChars(long goalChars, long instructionChars) {

@@ -1,6 +1,7 @@
 package com.summercamp.project.agent;
 
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicReference;
 
 /** Thread-safe mutable collector owned by exactly one Agent run. */
 public class AgentRunMetricsCollector {
@@ -49,6 +50,25 @@ public class AgentRunMetricsCollector {
     private final AtomicLong promptChars = new AtomicLong();
     private final AtomicLong responseChars = new AtomicLong();
     private final AtomicLong contextChars = new AtomicLong();
+    private final AtomicLong agentResumeCount = new AtomicLong();
+    private final AtomicLong resumeAttemptCount = new AtomicLong();
+    private final AtomicLong reusedCompletedStepCount = new AtomicLong();
+    private final AtomicLong executedAfterResumeStepCount = new AtomicLong();
+    private final AtomicLong finalValidationAttemptCount = new AtomicLong();
+    private final AtomicLong finalValidationFailureCount = new AtomicLong();
+    private final AtomicLong synthesisRepairTriggeredCount = new AtomicLong();
+    private final AtomicLong synthesisRepairSucceededCount = new AtomicLong();
+    private final AtomicLong synthesisRepairInstructionChars = new AtomicLong();
+    private final AtomicLong plannerClosureNormalizedCount = new AtomicLong();
+    private final AtomicLong deterministicPlannerFallbackCount = new AtomicLong();
+    private final AtomicLong deterministicExerciseFallbackCount = new AtomicLong();
+    private final AtomicLong deterministicSynthesisFallbackCount = new AtomicLong();
+    private final AtomicReference<AgentFallbackReason> deterministicPlannerFallbackReason =
+            new AtomicReference<>(AgentFallbackReason.NONE);
+    private final AtomicReference<AgentFallbackReason> deterministicExerciseFallbackReason =
+            new AtomicReference<>(AgentFallbackReason.NONE);
+    private final AtomicReference<AgentFallbackReason> deterministicSynthesisFallbackReason =
+            new AtomicReference<>(AgentFallbackReason.NONE);
 
     public void recordAgentRunDuration(long nanos) {
         agentRunDurationNanos.set(nonNegative(nanos));
@@ -84,6 +104,51 @@ public class AgentRunMetricsCollector {
 
     public void recordSkippedStep() {
         skippedStepCount.incrementAndGet();
+    }
+
+    public void recordAgentResume(long attempt, long reusedCompletedSteps) {
+        agentResumeCount.incrementAndGet();
+        resumeAttemptCount.set(nonNegative(attempt));
+        reusedCompletedStepCount.set(nonNegative(reusedCompletedSteps));
+    }
+
+    public void recordExecutedAfterResumeStep() {
+        executedAfterResumeStepCount.incrementAndGet();
+    }
+
+    public void recordFinalValidationAttempt(boolean valid) {
+        finalValidationAttemptCount.incrementAndGet();
+        if (!valid) {
+            finalValidationFailureCount.incrementAndGet();
+        }
+    }
+
+    public void recordSynthesisRepairTriggered(long instructionChars) {
+        synthesisRepairTriggeredCount.incrementAndGet();
+        synthesisRepairInstructionChars.addAndGet(nonNegative(instructionChars));
+    }
+
+    public void recordSynthesisRepairSucceeded() {
+        synthesisRepairSucceededCount.incrementAndGet();
+    }
+
+    public void recordPlannerClosureNormalized() {
+        plannerClosureNormalizedCount.incrementAndGet();
+    }
+
+    public void recordDeterministicPlannerFallback(AgentFallbackReason reason) {
+        deterministicPlannerFallbackCount.incrementAndGet();
+        deterministicPlannerFallbackReason.set(safeReason(reason));
+    }
+
+    public void recordDeterministicExerciseFallback(AgentFallbackReason reason) {
+        deterministicExerciseFallbackCount.incrementAndGet();
+        deterministicExerciseFallbackReason.set(safeReason(reason));
+    }
+
+    public void recordDeterministicSynthesisFallback(AgentFallbackReason reason) {
+        deterministicSynthesisFallbackCount.incrementAndGet();
+        deterministicSynthesisFallbackReason.set(safeReason(reason));
     }
 
     public void recordLlmRequest(AgentRunMetrics.LlmPhase phase, long requestChars, long inputChars) {
@@ -232,7 +297,27 @@ public class AgentRunMetricsCollector {
                 plannerGoalChars.get(),
                 promptChars.get(),
                 responseChars.get(),
-                contextChars.get());
+                contextChars.get(),
+                agentResumeCount.get(),
+                resumeAttemptCount.get(),
+                reusedCompletedStepCount.get(),
+                executedAfterResumeStepCount.get(),
+                finalValidationAttemptCount.get(),
+                finalValidationFailureCount.get(),
+                synthesisRepairTriggeredCount.get(),
+                synthesisRepairSucceededCount.get(),
+                synthesisRepairInstructionChars.get(),
+                plannerClosureNormalizedCount.get(),
+                deterministicPlannerFallbackCount.get(),
+                deterministicExerciseFallbackCount.get(),
+                deterministicSynthesisFallbackCount.get(),
+                deterministicPlannerFallbackReason.get().ordinal(),
+                deterministicExerciseFallbackReason.get().ordinal(),
+                deterministicSynthesisFallbackReason.get().ordinal());
+    }
+
+    private AgentFallbackReason safeReason(AgentFallbackReason reason) {
+        return reason == null ? AgentFallbackReason.NONE : reason;
     }
 
     private long millis(AtomicLong nanos) {

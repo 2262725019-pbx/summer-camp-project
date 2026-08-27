@@ -58,7 +58,9 @@ abstract class AbstractSkillAgentActionHandler implements AgentActionHandler {
         }
 
         String request = buildSkillRequest(
-                context.originalGoal(), step.inputs().getOrDefault("request", ""));
+                context.originalGoal(),
+                step.inputs().getOrDefault("request", ""),
+                context.resumeSupplementFor(step.id()).orElse(""));
         SkillTrustedContext trustedContext = trustedContext(step, context);
         context.metrics().recordSkillCall(action);
         if (trustedContext.weatherObservation().isPresent()) {
@@ -116,7 +118,11 @@ abstract class AbstractSkillAgentActionHandler implements AgentActionHandler {
         return SkillTrustedContext.empty();
     }
 
-    private String buildSkillRequest(String originalGoal, String stepRequest) {
+    private String buildSkillRequest(
+            String originalGoal,
+            String stepRequest,
+            String resumeSupplement
+    ) {
         String canonicalGoal = originalGoal == null ? "" : originalGoal.strip();
         String supplement = stepRequest == null ? "" : stepRequest.strip();
         String request;
@@ -126,6 +132,10 @@ abstract class AbstractSkillAgentActionHandler implements AgentActionHandler {
             request = supplement;
         } else {
             request = canonicalGoal + "\n\n当前 Agent 步骤补充：" + supplement;
+        }
+        String latestSupplement = resumeSupplement == null ? "" : resumeSupplement.strip();
+        if (!latestSupplement.isBlank()) {
+            request = request + "\n\n用户最新补充：" + latestSupplement;
         }
         if (request.length() <= MAX_SKILL_REQUEST_CHARS) {
             return request;

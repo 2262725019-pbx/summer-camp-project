@@ -83,6 +83,42 @@ class ValidateActionHandlerTest {
         );
     }
 
+    @Test
+    void temporalGoalRequiresSuccessfulDatetimeObservation() {
+        AgentPlan plan = coveragePlan(
+                "未来7天健康生活规划",
+                List.of(
+                        AgentAction.GET_DATETIME,
+                        AgentAction.RETRIEVE_KNOWLEDGE,
+                        AgentAction.CALCULATE
+                )
+        );
+        AgentState failedState = new AgentState(plan);
+        failedState.recordObservation(new AgentObservation("B1", false, "日期工具失败"));
+        failedState.recordObservation(success("B2"));
+        failedState.recordObservation(success("B3"));
+        AgentStep validation = plan.steps().get(plan.steps().size() - 2);
+
+        AgentObservation failed = handler.execute(validation, context(plan, failedState));
+
+        assertFalse(failed.success());
+        assertEquals(
+                ValidateActionHandler.MISSING_REQUIRED_DATETIME_RESULT,
+                failed.structuredData().get("code")
+        );
+
+        AgentState successfulState = new AgentState(plan);
+        successfulState.recordObservation(success("B1"));
+        successfulState.recordObservation(success("B2"));
+        successfulState.recordObservation(success("B3"));
+
+        AgentObservation passed = handler.execute(validation, context(plan, successfulState));
+
+        assertTrue(passed.success());
+        assertEquals(ValidateActionHandler.VALIDATION_PASSED,
+                passed.structuredData().get("code"));
+    }
+
     private AgentState completedBusinessState(AgentPlan plan, boolean ragMatched) {
         AgentState state = new AgentState(plan);
         state.recordObservation(success("datetime"));

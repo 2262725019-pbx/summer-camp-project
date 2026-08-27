@@ -68,7 +68,8 @@ class AgentSynthesisContextBuilderTest {
 
         String context = builder.build(goal, plan, state);
 
-        assertTrue(context.contains("REQUIRED_DOMAINS:\nEXERCISE\nMEAL\nWEATHER\nLIFESTYLE"));
+        assertTrue(context.contains(
+                "REQUIRED_DOMAINS:\nTEMPORAL\nEXERCISE\nMEAL\nWEATHER\nLIFESTYLE"));
         assertTrue(context.contains("COMPLETED_CAPABILITIES:\nGET_WEATHER\nRUN_EXERCISE_SKILL\nRUN_MEAL_SKILL"));
         assertTrue(context.contains("WEATHER_SCOPE=THREE_DAYS"));
         assertTrue(context.contains("WEATHER:"));
@@ -131,26 +132,27 @@ class AgentSynthesisContextBuilderTest {
 
         String context = builder.build(goal, plan, state);
 
-        assertTrue(context.contains("PLAN_START_DATE=2026-08-26"));
-        assertTrue(context.contains("PLAN_END_DATE=2026-09-01"));
+        assertTrue(context.contains("PLAN_START_DATE=2026-08-27"));
+        assertTrue(context.contains("PLAN_END_DATE=2026-09-02"));
         assertTrue(context.contains("""
                 PLAN_DATE_LABELS=
-                8月26日（周三）
                 8月27日（周四）
                 8月28日（周五）
                 8月29日（周六）
                 8月30日（周日）
                 8月31日（周一）
                 9月1日（周二）
+                9月2日（周三）
                 """));
+        assertEquals(7, dateLabelCount(context));
         assertTrue(context.contains("TRAINING_FREQUENCY_PER_WEEK=4"));
         assertTrue(context.contains("TRAINING_SESSION_TOTAL_MINUTES=40"));
         assertTrue(context.contains("热身+主训练+有氧+拉伸合计必须<=40分钟"));
-        assertTrue(context.contains("WEATHER_OBSERVED_THROUGH=2026-08-28"));
-        assertTrue(context.contains("WEATHER_UNQUERIED_FROM=2026-08-29"));
+        assertTrue(context.contains("WEATHER_OBSERVED_THROUGH=2026-08-29"));
+        assertTrue(context.contains("WEATHER_UNQUERIED_FROM=2026-08-30"));
         assertTrue(context.contains("任何具体晴雨、温度、风力都属于未知"));
         assertTrue(context.contains("不得生成或推断"));
-        assertTrue(context.contains("UNQUERIED_FROM=2026-08-29"));
+        assertTrue(context.contains("UNQUERIED_FROM=2026-08-30"));
     }
 
     @Test
@@ -254,6 +256,14 @@ class AgentSynthesisContextBuilderTest {
         return text.split(java.util.regex.Pattern.quote(value), -1).length - 1;
     }
 
+    private long dateLabelCount(String context) {
+        int start = context.indexOf("PLAN_DATE_LABELS=\n");
+        int end = context.indexOf("TRAINING_FREQUENCY_PER_WEEK=", start);
+        return context.substring(start, end).lines()
+                .filter(line -> line.matches("\\d{1,2}月\\d{1,2}日（周[一二三四五六日]）"))
+                .count();
+    }
+
     private AgentPlan plan() {
         return new AgentPlan("健康目标", List.of(
                 step("datetime", AgentAction.GET_DATETIME),
@@ -291,7 +301,7 @@ class AgentSynthesisContextBuilderTest {
                 "datetime",
                 true,
                 "日期查询成功",
-                Map.of("modelContent", "{\"success\":true,\"result\":{\"date\":\"2026-08-26\"}}")
+                Map.of("modelContent", "{\"success\":true,\"result\":{\"date\":\"2026-08-27\"}}")
         ));
         state.recordObservation(new AgentObservation(
                 "weather",
@@ -300,7 +310,7 @@ class AgentSynthesisContextBuilderTest {
                 Map.of(
                         "location", "镇江",
                         "period", "THREE_DAYS",
-                        "modelContent", "2026-08-26 多云；2026-08-27 阴；2026-08-28 中雨"
+                        "modelContent", "2026-08-27 多云；2026-08-28 中雨；2026-08-29 晴"
                 )
         ));
         state.recordObservation(new AgentObservation("exercise", true, "周五快走，原方案为户外"));

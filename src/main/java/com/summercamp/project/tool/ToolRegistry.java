@@ -8,6 +8,7 @@ import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -50,7 +51,25 @@ public class ToolRegistry {
 
     /** 执行工具并保留图片、直接完成等富结果，供多步 Function Calling 使用。 */
     public Invocation invoke(String name, String argumentJson, ToolContext context) {
+        return invoke(name, argumentJson, context, ToolAccessPolicy.unrestricted());
+    }
+
+    /** 在请求级 capability policy 内执行工具；未授权调用在 Registry 边界 fail closed。 */
+    public Invocation invoke(
+            String name,
+            String argumentJson,
+            ToolContext context,
+            ToolAccessPolicy accessPolicy
+    ) {
         long startedAt = System.nanoTime();
+        ToolAccessPolicy policy = Objects.requireNonNull(
+                accessPolicy, "accessPolicy must not be null");
+        if (!policy.allows(name)) {
+            String error = "当前请求不允许调用工具：" + safeName(name);
+            LOGGER.warn("工具调用被权限策略拒绝：{}，耗时={}ms",
+                    safeName(name), elapsedMillis(startedAt));
+            return failure(error);
+        }
         ToolContext invocationContext = context == null ? ToolContext.anonymous() : context;
         invocationContext.metrics().recordToolCall(name);
         try {

@@ -60,8 +60,47 @@ public final class AgentExecutor {
                 voiceMessage,
                 state,
                 plan,
-                Objects.requireNonNull(metrics, "metrics must not be null")
+                Objects.requireNonNull(metrics, "metrics must not be null"),
+                null
         );
+        return executePending(context, false);
+    }
+
+    public AgentState resume(
+            String userId,
+            List<ChatMessage> history,
+            boolean voiceMessage,
+            AgentRunCheckpoint checkpoint,
+            AgentResumeInput resumeInput,
+            AgentRunMetrics metrics
+    ) {
+        Objects.requireNonNull(checkpoint, "checkpoint must not be null");
+        Objects.requireNonNull(resumeInput, "resumeInput must not be null");
+        if (!checkpoint.waitingStepId().equals(resumeInput.waitingStepId())) {
+            throw new IllegalArgumentException("resume input does not target checkpoint waiting step");
+        }
+        AgentState state = AgentState.restoreForResume(
+                checkpoint.state(), checkpoint.waitingStepId());
+        AgentExecutionContext context = new AgentExecutionContext(
+                userId,
+                checkpoint.originalGoal(),
+                history,
+                voiceMessage,
+                state,
+                checkpoint.plan(),
+                Objects.requireNonNull(metrics, "metrics must not be null"),
+                resumeInput);
+        metrics.recordAgentResume(resumeInput.attempt(), checkpoint.state().completedSteps().size());
+        return executePending(context, true);
+    }
+
+    private AgentState executePending(
+            AgentExecutionContext context,
+            boolean resumed
+    ) {
+        AgentState state = context.mutableState();
+        AgentPlan plan = context.plan();
+        AgentRunMetrics metrics = context.metrics();
         int executedSteps = 0;
 
         while (state.hasPendingSteps()) {
@@ -88,6 +127,9 @@ public final class AgentExecutor {
             }
 
             metrics.recordExecutedStep();
+            if (resumed) {
+                metrics.recordExecutedAfterResumeStep();
+            }
             executeStep(readyStep.orElseThrow(), context);
             executedSteps++;
         }

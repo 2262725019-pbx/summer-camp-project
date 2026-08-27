@@ -139,6 +139,86 @@ class AgentStateTest {
         assertThrows(UnsupportedOperationException.class, () -> validationResult.errors().add("change"));
     }
 
+    @Test
+    void restoresCompletedStepsAndResetsOnlyWaitingBranchForResume() {
+        AgentPlan plan = new AgentPlan("健康规划", List.of(
+                step("datetime", AgentAction.GET_DATETIME),
+                new AgentStep("meal", AgentAction.RUN_MEAL_SKILL,
+                        "生成饮食", "补齐资料", List.of("datetime")),
+                new AgentStep("validate", AgentAction.VALIDATE,
+                        "校验", "闭环", List.of("meal")),
+                new AgentStep("synthesis", AgentAction.SYNTHESIZE,
+                        "汇总", "输出", List.of("validate"))));
+        AgentState state = new AgentState(plan);
+        AgentObservation completed = new AgentObservation("datetime", true, "日期完成");
+        state.recordObservation(completed);
+        state.recordObservation(waiting("meal"));
+        state.markSkipped("validate", "waiting dependency");
+        state.markSkipped("synthesis", "waiting dependency");
+
+        AgentState restored = AgentState.restoreForResume(
+                AgentStateSnapshot.from(state), "meal");
+
+        assertEquals(AgentStepStatus.COMPLETED, restored.statusOf("datetime"));
+        assertEquals(completed, restored.findObservation("datetime").orElseThrow());
+        assertEquals(AgentStepStatus.PENDING, restored.statusOf("meal"));
+        assertEquals(AgentStepStatus.PENDING, restored.statusOf("validate"));
+        assertEquals(AgentStepStatus.PENDING, restored.statusOf("synthesis"));
+        assertTrue(restored.findObservation("meal").isEmpty());
+        assertTrue(restored.findObservation("validate").isEmpty());
+        assertTrue(restored.findObservation("synthesis").isEmpty());
+        assertThrows(IllegalStateException.class, () -> restored.recordObservation(
+                new AgentObservation("datetime", false, "must not overwrite")));
+    }
+
+    @Test
+    void rejectsRunningCheckpointState() {
+        AgentPlan plan = new AgentPlan("健康规划", List.of(
+                step("datetime", AgentAction.GET_DATETIME),
+                step("meal", AgentAction.RUN_MEAL_SKILL)));
+        AgentState state = new AgentState(plan);
+        state.recordObservation(new AgentObservation("datetime", true, "完成"));
+        state.markRunning("meal");
+
+        assertThrows(IllegalArgumentException.class, () -> AgentState.restoreForResume(
+                AgentStateSnapshot.from(state), "meal"));
+    }
+
+    @Test
+    void preservesUnrelatedNonRecoverableFailureAndSkippedBranch() {
+        AgentPlan plan = new AgentPlan("健康规划", List.of(
+                step("provider", AgentAction.RETRIEVE_KNOWLEDGE),
+                new AgentStep("provider-dependent", AgentAction.CREATE_TODO,
+                        "创建待办", "失败分支", List.of("provider")),
+                step("meal", AgentAction.RUN_MEAL_SKILL),
+                new AgentStep("meal-dependent", AgentAction.VALIDATE,
+                        "校验", "等待分支", List.of("meal"))));
+        AgentState state = new AgentState(plan);
+        AgentObservation providerFailure = new AgentObservation(
+                "provider", false, "provider timeout", Map.of("code", "HANDLER_FAILURE"));
+        state.recordObservation(providerFailure);
+        state.markSkipped("provider-dependent", "provider failed");
+        state.recordObservation(waiting("meal"));
+        state.markSkipped("meal-dependent", "waiting dependency");
+
+        AgentState restored = AgentState.restoreForResume(
+                AgentStateSnapshot.from(state), "meal");
+
+        assertEquals(AgentStepStatus.FAILED, restored.statusOf("provider"));
+        assertEquals(providerFailure, restored.findObservation("provider").orElseThrow());
+        assertEquals(AgentStepStatus.SKIPPED, restored.statusOf("provider-dependent"));
+        assertEquals(AgentStepStatus.PENDING, restored.statusOf("meal"));
+        assertEquals(AgentStepStatus.PENDING, restored.statusOf("meal-dependent"));
+    }
+
+    private AgentObservation waiting(String stepId) {
+        return new AgentObservation(
+                stepId,
+                false,
+                "请补资料",
+                Map.of("code", "NEEDS_USER_INPUT", "recoverable", "true"));
+    }
+
     private AgentPlan plan() {
         return new AgentPlan("制定健康生活规划", List.of(
                 step("datetime", AgentAction.GET_DATETIME),

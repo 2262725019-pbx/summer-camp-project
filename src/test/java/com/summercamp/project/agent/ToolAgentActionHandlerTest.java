@@ -27,13 +27,19 @@ class ToolAgentActionHandlerTest {
 
     @Test
     void dateTimeUsesCurrentDateTimeTool() {
-        when(toolRegistry.invoke(anyString(), anyString(), any())).thenReturn(successInvocation());
+        when(toolRegistry.invoke(anyString(), anyString(), any())).thenReturn(
+                new ToolRegistry.Invocation(
+                        true,
+                        ToolResult.text("2026-08-27"),
+                        "{\"success\":true,\"result\":{\"date\":\"2026-08-27\"}}"
+                ));
         AgentStep step = step(AgentAction.GET_DATETIME, Map.of("timezone", "Asia/Shanghai"));
 
         AgentObservation observation = new GetDateTimeAgentActionHandler(toolRegistry, objectMapper)
                 .execute(step, context(step));
 
         assertTrue(observation.success());
+        assertTrue(observation.structuredData().get("modelContent").contains("2026-08-27"));
         verifyInvocation("get_current_datetime", Map.of("timezone", "Asia/Shanghai"));
     }
 

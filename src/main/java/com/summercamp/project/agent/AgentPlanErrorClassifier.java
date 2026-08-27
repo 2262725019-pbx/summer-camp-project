@@ -23,11 +23,26 @@ final class AgentPlanErrorClassifier {
         if (message.contains("unsupported field")) {
             return AgentPlanErrorCode.UNKNOWN_FIELD;
         }
-        if (message.contains("supported AgentAction") || message.contains("must have an AgentAction")) {
+        if (message.contains("supported AgentAction")
+                || message.contains("must have an AgentAction")
+                || message.contains(".action is required")) {
             return AgentPlanErrorCode.UNKNOWN_ACTION;
         }
         if (message.contains("goal must exactly match") || message.contains("GOAL_MISMATCH")) {
             return AgentPlanErrorCode.GOAL_MISMATCH;
+        }
+        if (message.contains("Plan must not be null")) {
+            return AgentPlanErrorCode.PLAN_INVALID;
+        }
+        if (message.contains("Goal must not be blank")
+                || message.contains(".goal is required")
+                || message.contains(".goal must be a non-blank string")) {
+            return AgentPlanErrorCode.GOAL_INVALID;
+        }
+        if (message.contains("must not be null")
+                || message.contains("must have a non-blank id")
+                || message.contains("must have a non-blank description")) {
+            return AgentPlanErrorCode.STEP_INVALID;
         }
         if (message.contains("input") || message.contains("inputs")) {
             return AgentPlanErrorCode.INVALID_INPUTS;
@@ -68,6 +83,18 @@ final class AgentPlanErrorClassifier {
         if (message.contains("SYNTHESIZE must directly depend on VALIDATE")) {
             return AgentPlanErrorCode.SYNTHESIZE_VALIDATION_DEPENDENCY_INVALID;
         }
+        if (message.contains("At least one business step must execute before VALIDATE")) {
+            return AgentPlanErrorCode.BUSINESS_STEP_MISSING;
+        }
+        if (message.contains("must not follow VALIDATE")) {
+            return AgentPlanErrorCode.BUSINESS_STEP_ORDER_INVALID;
+        }
+        if (message.contains("VALIDATE must close business branch")) {
+            return AgentPlanErrorCode.VALIDATE_BRANCH_COVERAGE_INVALID;
+        }
+        if (message.contains(GoalCoverageValidator.MISSING_REQUIRED_DATETIME_ACTION)) {
+            return AgentPlanErrorCode.MISSING_REQUIRED_DATETIME_ACTION;
+        }
         if (message.contains(GoalCoverageValidator.MISSING_REQUIRED_EXERCISE_ACTION)) {
             return AgentPlanErrorCode.MISSING_REQUIRED_EXERCISE_ACTION;
         }
@@ -76,6 +103,13 @@ final class AgentPlanErrorClassifier {
         }
         if (message.contains(GoalCoverageValidator.MISSING_REQUIRED_WEATHER_ACTION)) {
             return AgentPlanErrorCode.MISSING_REQUIRED_WEATHER_ACTION;
+        }
+        if (message.contains("must be an object")
+                || message.contains("must be an array")
+                || message.contains("must be a string array")
+                || message.contains("is required")
+                || message.contains("must be a non-blank string")) {
+            return AgentPlanErrorCode.JSON_STRUCTURE_INVALID;
         }
         return AgentPlanErrorCode.OTHER_PLAN_VALIDATION_ERROR;
     }

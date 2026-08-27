@@ -1,0 +1,16 @@
+package com.summercamp.project.agent;
+
+/** Stable, deterministic reasons why a synthesized final plan cannot be returned. */
+public enum FinalPlanValidationIssueCode {
+    MISSING_PLAN_DATE,
+    WRONG_WEEKDAY,
+    CONCRETE_WEATHER_OUTSIDE_SCOPE,
+    SYNTHESIS_ENVELOPE_INVALID,
+    TRAINING_AUDIT_MISSING,
+    TRAINING_FREQUENCY_MISMATCH,
+    TRAINING_DATE_OUTSIDE_PLAN,
+    TRAINING_DATE_NOT_PRESENT_IN_ANSWER,
+    TRAINING_DURATION_MISSING,
+    TRAINING_DURATION_DATE_MISMATCH,
+    TRAINING_DURATION_EXCEEDED
+}
