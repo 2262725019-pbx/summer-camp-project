@@ -2,6 +2,7 @@ package com.summercamp.project.message;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
@@ -28,7 +29,10 @@ import com.summercamp.project.agent.AgentState;
 import com.summercamp.project.agent.AgentStep;
 import com.summercamp.project.agent.PendingAgentRunStore;
 import com.summercamp.project.config.RagProperties;
+import com.summercamp.project.conversation.ChatContextOrchestrator;
 import com.summercamp.project.conversation.InMemoryConversationMemoryStore;
+import com.summercamp.project.conversation.MemoryContext;
+import com.summercamp.project.conversation.SessionFactKey;
 import com.summercamp.project.intent.IntentClassificationClient;
 import com.summercamp.project.intent.IntentRecognizer;
 import com.summercamp.project.intent.IntentResult;
@@ -42,6 +46,8 @@ import com.summercamp.project.llm.ImageGenerationClient;
 import com.summercamp.project.llm.ImageInput;
 import com.summercamp.project.llm.LlmException;
 import com.summercamp.project.rag.KeywordRagRetriever;
+import com.summercamp.project.rag.RagContext;
+import com.summercamp.project.rag.RagRetriever;
 import com.summercamp.project.skill.PendingSkillStore;
 import com.summercamp.project.skill.SkillRegistry;
 import com.summercamp.project.skill.entertainment.ColdJokeSkill;
@@ -72,7 +78,8 @@ class MessageProcessorTest {
 
     private FakeGateway gateway;
     private FakeModel model;
-    private InMemoryConversationMemoryStore memory;
+    private CountingMemoryStore memory;
+    private CountingRagRetriever ragRetriever;
     private MessageProcessor processor;
     private AgentOrchestrator agentOrchestrator;
     private PendingAgentRunStore pendingAgentRunStore;
@@ -81,7 +88,7 @@ class MessageProcessorTest {
     void setUp() {
         gateway = new FakeGateway();
         model = new FakeModel();
-        memory = new InMemoryConversationMemoryStore();
+        memory = new CountingMemoryStore();
         agentOrchestrator = mock(AgentOrchestrator.class);
         pendingAgentRunStore = new PendingAgentRunStore();
         when(agentOrchestrator.run(any(AgentRunRequest.class))).thenReturn(new AgentRunResult(
@@ -94,6 +101,9 @@ class MessageProcessorTest {
         SkillRegistry skillRegistry = new SkillRegistry(List.of(
                 new MuscleGainMealPlanSkill(new FoodCatalog(objectMapper)),
                 new ColdJokeSkill()));
+        RagProperties ragProperties = new RagProperties(true, 3, 2, 2_500);
+        ragRetriever = new CountingRagRetriever(
+                new KeywordRagRetriever(ragProperties, objectMapper));
         processor = new MessageProcessor(
                 gateway,
                 model,
@@ -105,8 +115,9 @@ class MessageProcessorTest {
                 new PendingWeatherRequestStore(),
                 skillRegistry,
                 new PendingSkillStore(),
-                new KeywordRagRetriever(new RagProperties(true, 3, 2, 2_500), objectMapper),
+                ragRetriever,
                 memory,
+                new ChatContextOrchestrator(ragProperties),
                 new MessageDeduplicator(),
                 new AgentGoalMatcher(),
                 agentOrchestrator,
@@ -368,6 +379,186 @@ class MessageProcessorTest {
         assertEquals(2, model.chatRequests.get(1).history().size());
         assertEquals("你好", model.chatRequests.get(1).history().getFirst().content());
         assertEquals(List.of("reply-1", "reply-2"), gateway.sentTexts);
+    }
+
+    @Test
+    void shouldInjectRelevantOldMemoryWithoutDuplicatingItInRecentHistory() {
+        ageMemory("user-a", "我最喜欢用 Java 做后端。", "已经记下你的偏好。");
+
+        processor.process(textMessage("memory-recall", "user-a", "我之前偏好什么后端语言？"));
+
+        ChatRequest request = model.chatRequests.getFirst();
+        assertTrue(request.groundingContext().contains("此前的对话记录"));
+        assertTrue(request.groundingContext().contains("Java"));
+        assertFalse(request.history().stream().anyMatch(message -> message.content().contains("Java")));
+    }
+
+    @Test
+    void shouldNotAddMemoryGroundingForUnrelatedQuery() {
+        ageMemory("user-a", "我最喜欢用 Java 做后端。", "已经记下你的偏好。");
+
+        processor.process(textMessage("memory-negative", "user-a", "推荐一部科幻电影。"));
+
+        assertTrue(model.chatRequests.getFirst().groundingContext().isBlank());
+    }
+
+    @Test
+    void shouldKeepCurrentMessageSeparateAndHigherPriorityThanOldMemory() {
+        ageMemory("user-a", "演示地点写镇江。", "旧地点是镇江。");
+
+        processor.process(textMessage("memory-override", "user-a", "现在演示地点改成南京。"));
+
+        ChatRequest request = model.chatRequests.getFirst();
+        assertEquals("现在演示地点改成南京。", request.text());
+        assertTrue(request.groundingContext().contains("镇江"));
+        assertTrue(request.groundingContext().contains("以当前消息为准"));
+        assertFalse(request.history().stream().anyMatch(message -> message.content().contains("南京")));
+    }
+
+    @Test
+    void shouldInjectNewSessionFactInTheCurrentOrdinaryChatTurn() {
+        processor.process(textMessage("fact-create", "user-a", "演示地点：镇江"));
+
+        ChatRequest request = model.chatRequests.getFirst();
+        assertEquals("演示地点：镇江", request.text());
+        assertTrue(request.groundingContext().contains("[SESSION_FACTS]"));
+        assertTrue(request.groundingContext().contains("演示地点=镇江"));
+        assertTrue(request.groundingContext().contains("以当前消息为准"));
+    }
+
+    @Test
+    void shouldUpdateFactForCurrentTurnWithoutReplacingOtherFacts() {
+        processor.process(textMessage(
+                "fact-initial",
+                "user-a",
+                "演示地点：镇江\n答辩重点：断点续跑\n后端语言：Java"));
+        processor.process(textMessage(
+                "fact-update", "user-a", "地点改成南京，其他保持不变。"));
+
+        ChatRequest request = model.chatRequests.get(1);
+        assertEquals("地点改成南京，其他保持不变。", request.text());
+        assertTrue(request.groundingContext().contains("演示地点=南京"));
+        assertTrue(request.groundingContext().contains("答辩重点=断点续跑"));
+        assertTrue(request.groundingContext().contains("后端语言=Java"));
+        assertFalse(request.groundingContext().contains("演示地点=镇江"));
+    }
+
+    @Test
+    void shouldClearSessionFactsWithTheExistingClearCommand() {
+        processor.process(textMessage("fact-before-clear", "user-a", "演示地点：南京"));
+        processor.process(textMessage("fact-clear", "user-a", "/clear"));
+
+        assertTrue(memory.recall("user-a", "普通问题").sessionFacts().isEmpty());
+        assertTrue(memory.history("user-a").isEmpty());
+    }
+
+    @Test
+    void shouldNotExtractSessionFactsFromTheAgentRoute() {
+        processor.process(textMessage(
+                "agent-fact-boundary", "user-a", "/agent 运动目标：增肌"));
+
+        assertEquals(0, memory.recallCount);
+        assertTrue(memory.recall("user-a", "普通问题").sessionFacts().isEmpty());
+        assertEquals(0, ragRetriever.retrieveCount);
+        assertTrue(model.chatRequests.isEmpty());
+        verify(agentOrchestrator).run(any(AgentRunRequest.class));
+    }
+
+    @Test
+    void shouldExtractFactsFromTranscribedOrdinaryVoiceWithoutStoringAudio() {
+        processor.process(new InboundMessage(
+                "fact-voice",
+                "user-a",
+                "",
+                List.of(),
+                List.of(new VoiceInput(
+                        new byte[] {9, 8, 7}, "后端语言：Java", 6, 16, 24_000, 1_000)),
+                false,
+                false,
+                false));
+
+        assertTrue(model.chatRequests.getFirst().groundingContext().contains("后端语言=Java"));
+        assertEquals("Java", memory.recall("user-a", "普通问题").sessionFacts().stream()
+                .filter(fact -> fact.key() == SessionFactKey.PREFERRED_BACKEND_LANGUAGE)
+                .findFirst()
+                .orElseThrow()
+                .value());
+        assertFalse(memory.history("user-a").toString().contains("9, 8, 7"));
+    }
+
+    @Test
+    void shouldRecallMemoryForTranscribedVoiceWithoutSeparateVoiceMemory() {
+        ageMemory("user-a", "我最喜欢用 Java 做后端。", "已经记下你的偏好。");
+
+        processor.process(new InboundMessage(
+                "memory-voice",
+                "user-a",
+                "",
+                List.of(),
+                List.of(new VoiceInput(
+                        new byte[] {1}, "我之前偏好什么后端语言？", 6, 16, 24_000, 1_000)),
+                false,
+                false,
+                false));
+
+        assertTrue(model.chatRequests.getFirst().groundingContext().contains("Java"));
+        assertEquals(1, gateway.sentVoices.size());
+    }
+
+    @Test
+    void shouldRetrieveRagAndMemoryExactlyOnceForUnifiedVoiceContext() {
+        processor.process(new InboundMessage(
+                "unified-voice",
+                "user-a",
+                "",
+                List.of(),
+                List.of(new VoiceInput(
+                        new byte[] {1},
+                        "项目使用什么 Java 和 Spring Boot 版本？",
+                        6,
+                        16,
+                        24_000,
+                        1_000)),
+                false,
+                false,
+                false));
+
+        assertEquals(1, memory.recallCount);
+        assertEquals(1, ragRetriever.retrieveCount);
+        assertTrue(model.chatRequests.getFirst().groundingContext().contains("[RAG_EVIDENCE]"));
+        assertEquals(1, gateway.sentVoices.size());
+    }
+
+    @Test
+    void shouldKeepRagAndMemoryAsSeparateGroundingBlocks() {
+        ageMemory("user-a", "智谱 API Key 是项目配置的一部分。", "记住了。");
+
+        processor.process(textMessage("memory-rag", "user-a", "智谱 API Key 应该配置在哪里？"));
+
+        String grounding = model.chatRequests.getFirst().groundingContext();
+        assertTrue(grounding.contains("此前的对话记录"));
+        assertTrue(grounding.contains("从项目 FAQ 检索到的参考资料"));
+        assertTrue(grounding.contains("config/application-local.properties"));
+    }
+
+    @Test
+    void shouldStoreOnlyAnImagePlaceholderAndNeverImageBytes() {
+        processor.process(new InboundMessage(
+                "memory-image",
+                "user-a",
+                "看看图片",
+                List.of(new ImageInput("SECRET-BYTES".getBytes(java.nio.charset.StandardCharsets.UTF_8),
+                        "image/png")),
+                List.of(),
+                false,
+                false,
+                false));
+
+        String stored = memory.history("user-a").toString();
+        assertTrue(stored.contains("[用户发送了 1 张图片]"));
+        assertFalse(stored.contains("SECRET-BYTES"));
+        assertEquals(0, memory.recallCount);
+        assertEquals(0, ragRetriever.retrieveCount);
     }
 
     @Test
@@ -705,6 +896,16 @@ class MessageProcessorTest {
                 false);
     }
 
+    private void ageMemory(String userId, String userText, String assistantText) {
+        memory.recordExchange(userId, userText, assistantText);
+        for (int index = 0; index < 6; index++) {
+            memory.recordExchange(
+                    userId,
+                    "无关日常闲聊编号 " + index,
+                    "普通回复编号 " + index);
+        }
+    }
+
     private AgentRunResult waitingAgentResult(String goal) {
         AgentPlan plan = new AgentPlan(goal, List.of(
                 new AgentStep("datetime", AgentAction.GET_DATETIME,
@@ -742,6 +943,33 @@ class MessageProcessorTest {
                 .execute("user-a", goal, List.of(), false, plan);
         return new AgentRunResult(
                 AgentRunResult.Status.NEEDS_USER_INPUT, "请补资料", plan, state);
+    }
+
+    private static final class CountingMemoryStore extends InMemoryConversationMemoryStore {
+
+        private int recallCount;
+
+        @Override
+        public MemoryContext recall(String userId, String currentQuery) {
+            recallCount++;
+            return super.recall(userId, currentQuery);
+        }
+    }
+
+    private static final class CountingRagRetriever implements RagRetriever {
+
+        private final RagRetriever delegate;
+        private int retrieveCount;
+
+        private CountingRagRetriever(RagRetriever delegate) {
+            this.delegate = delegate;
+        }
+
+        @Override
+        public RagContext retrieve(String query) {
+            retrieveCount++;
+            return delegate.retrieve(query);
+        }
     }
 
     private static final class FakeModel implements

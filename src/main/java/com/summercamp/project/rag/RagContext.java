@@ -21,6 +21,14 @@ public record RagContext(List<Hit> hits, String promptContext) {
         return hits.stream().map(hit -> hit.document().id()).toList();
     }
 
-    public record Hit(RagDocument document, int score) {
+    public record Hit(RagDocument document, int score, RagScoreBreakdown breakdown) {
+
+        public Hit(RagDocument document, int score) {
+            this(document, score, RagScoreBreakdown.legacy(score));
+        }
+
+        public Hit(RagDocument document, RagScoreBreakdown breakdown) {
+            this(document, breakdown.totalScore(), breakdown);
+        }
     }
 }

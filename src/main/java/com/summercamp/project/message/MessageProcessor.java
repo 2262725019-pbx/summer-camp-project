@@ -9,6 +9,9 @@ import com.summercamp.project.agent.AgentRunRequest;
 import com.summercamp.project.agent.AgentRunResult;
 import com.summercamp.project.agent.PendingAgentRunStore;
 import com.summercamp.project.conversation.ConversationMemoryStore;
+import com.summercamp.project.conversation.ChatContextOrchestrator;
+import com.summercamp.project.conversation.MemoryContext;
+import com.summercamp.project.conversation.UnifiedChatContext;
 import com.summercamp.project.intent.IntentRecognizer;
 import com.summercamp.project.intent.IntentResult;
 import com.summercamp.project.intent.IntentType;
@@ -87,6 +90,7 @@ public class MessageProcessor {
     private final PendingSkillStore pendingSkillStore;
     private final RagRetriever ragRetriever;
     private final ConversationMemoryStore memoryStore;
+    private final ChatContextOrchestrator contextOrchestrator;
     private final MessageDeduplicator deduplicator;
     private final AgentGoalMatcher agentGoalMatcher;
     private final AgentOrchestrator agentOrchestrator;
@@ -105,6 +109,7 @@ public class MessageProcessor {
             PendingSkillStore pendingSkillStore,
             RagRetriever ragRetriever,
             ConversationMemoryStore memoryStore,
+            ChatContextOrchestrator contextOrchestrator,
             MessageDeduplicator deduplicator,
             AgentGoalMatcher agentGoalMatcher,
             AgentOrchestrator agentOrchestrator,
@@ -121,6 +126,7 @@ public class MessageProcessor {
         this.pendingSkillStore = pendingSkillStore;
         this.ragRetriever = ragRetriever;
         this.memoryStore = memoryStore;
+        this.contextOrchestrator = contextOrchestrator;
         this.deduplicator = deduplicator;
         this.agentGoalMatcher = agentGoalMatcher;
         this.agentOrchestrator = agentOrchestrator;
@@ -257,7 +263,7 @@ public class MessageProcessor {
             case IMAGE_ANALYSIS_REQUEST -> sendReply(
                     message,
                     "可以，请发送需要识别的图片，也可以同时附带问题；收到后我会自动分析图片内容。");
-            case CHAT -> answerWithRag(message);
+            case CHAT -> answerWithUnifiedContext(message);
             case CLEAR_CONTEXT, HELP -> throw new IllegalStateException("命令意图未被提前处理");
         }
     }
@@ -381,14 +387,61 @@ public class MessageProcessor {
         memoryStore.recordExchange(message.userId(), memoryText, memoryReply);
     }
 
-    private void answerWithRag(InboundMessage message) throws IOException {
-        RagContext context = ragRetriever.retrieve(message.text());
-        if (context.matched()) {
-            LOGGER.info("RAG 命中资料：{}", context.documentIds());
+    private void answerWithUnifiedContext(InboundMessage message) throws IOException {
+        MemoryContext memory = memoryStore.recall(message.userId(), message.text());
+        RagContext rag = ragRetriever.retrieve(message.text());
+        UnifiedChatContext context = contextOrchestrator.assemble(
+                message.userId(), message.text(), memory, rag);
+        MemoryContext.Diagnostics diagnostics = memory.diagnostics();
+        LOGGER.debug(
+                "Memory recall: recentMessages={}, queries={}, recalled={}, contextChars={}, topScore={}",
+                diagnostics.memoryRecentMessages(),
+                diagnostics.memoryRecallQueries(),
+                diagnostics.memoryRecalledEntries(),
+                diagnostics.memoryRecallContextChars(),
+                diagnostics.memoryTopScore());
+        LOGGER.debug(
+                "Memory facts: sessionFacts={}, extracted={}, updated={}, removed={}, keys={}",
+                diagnostics.memorySessionFacts(),
+                diagnostics.memoryFactsExtracted(),
+                diagnostics.memoryFactsUpdated(),
+                diagnostics.memoryFactsRemoved(),
+                memory.sessionFacts().stream().map(fact -> fact.key().name()).toList());
+        if (rag.matched()) {
+            LOGGER.info("RAG 命中资料：{}", rag.documentIds());
         } else {
             LOGGER.debug("RAG 未命中资料");
         }
-        answer(message, message.text(), context.promptContext());
+        UnifiedChatContext.Diagnostics contextDiagnostics = context.diagnostics();
+        LOGGER.debug(
+                "Context assembled: ragHits={}, recalledMemories={}, sessionFacts={}, "
+                        + "recentChars={}, recallChars={}, factChars={}, ragChars={}, totalChars={}, "
+                        + "ragDropped={}, memoryDropped={}",
+                contextDiagnostics.ragHitsIncluded(),
+                contextDiagnostics.memoryRecallIncluded(),
+                contextDiagnostics.factCountIncluded(),
+                contextDiagnostics.contextRecentChars(),
+                contextDiagnostics.contextRecallChars(),
+                contextDiagnostics.contextFactChars(),
+                contextDiagnostics.contextRagChars(),
+                contextDiagnostics.contextTotalChars(),
+                contextDiagnostics.ragHitsDropped(),
+                contextDiagnostics.memoryRecallDropped());
+        ChatRequest request = new ChatRequest(
+                context.recentMessages(),
+                message.text(),
+                message.images(),
+                context.groundingContext());
+        ChatOutcome outcome = chatClient.chat(
+                request,
+                new ToolContext(message.userId(), message.text(), context.recentMessages()));
+        sendOutcome(message, outcome);
+        memoryStore.recordExchange(
+                message.userId(),
+                message.text().strip(),
+                outcome.text().isBlank() && !outcome.media().isEmpty()
+                        ? "[已发送 " + outcome.media().size() + " 张图片]"
+                        : outcome.text());
     }
 
     private void executeSkill(InboundMessage message, BotSkill skill) throws IOException {

@@ -7,6 +7,10 @@ public interface ConversationMemoryStore {
 
     List<ChatMessage> history(String userId);
 
+    default MemoryContext recall(String userId, String currentQuery) {
+        return MemoryContext.recentOnly(history(userId));
+    }
+
     void recordExchange(String userId, String userText, String assistantText);
 
     void clear(String userId);

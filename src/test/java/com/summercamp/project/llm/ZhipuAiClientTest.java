@@ -136,6 +136,24 @@ class ZhipuAiClientTest {
     }
 
     @Test
+    void shouldPlaceRecalledMemoryBeforeRecentHistoryAndCurrentMessageLast() {
+        JsonNode payload = client.buildChatPayload(new ChatRequest(
+                List.of(ChatMessage.user("最近一问"), ChatMessage.assistant("最近一答")),
+                "现在地点改成南京",
+                List.of(),
+                "以下内容来自此前对话；冲突时以当前消息为准：旧地点是镇江"));
+
+        JsonNode messages = payload.path("messages");
+        assertEquals(5, messages.size());
+        assertEquals("system", messages.get(0).path("role").asText());
+        assertEquals("system", messages.get(1).path("role").asText());
+        assertTrue(messages.get(1).path("content").asText().contains("以当前消息为准"));
+        assertEquals("最近一问", messages.get(2).path("content").asText());
+        assertEquals("最近一答", messages.get(3).path("content").asText());
+        assertEquals("现在地点改成南京", messages.get(4).path("content").asText());
+    }
+
+    @Test
     void shouldKeepTrustedWeatherGroundingAtSystemLevelAndHideWeatherForThatRequest() {
         ToolRegistry registry = new ToolRegistry(
                 List.of(
