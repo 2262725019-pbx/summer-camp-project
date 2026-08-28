@@ -423,6 +423,81 @@ class MessageProcessorTest {
                 false);
     }
 
+    private MessageProcessor processorWith(ChatModelClient chatModel) {
+        ObjectMapper objectMapper = new ObjectMapper();
+        SkillRegistry skillRegistry = new SkillRegistry(List.of(
+                new MuscleGainMealPlanSkill(new FoodCatalog(objectMapper)),
+                new ColdJokeSkill()));
+        return new MessageProcessor(
+                gateway,
+                chatModel,
+                model,
+                model,
+                model,
+                new IntentRecognizer(model),
+                new FakeWeather(),
+                new PendingWeatherRequestStore(),
+                skillRegistry,
+                new PendingSkillStore(),
+                new KeywordRagRetriever(new RagProperties(true, 3, 2, 2_500), objectMapper),
+                memory,
+                new MessageDeduplicator());
+    }
+
+    @Test
+    void shouldSendAckWhenProcessingTakesTooLong() {
+        long originalDelay = MessageProcessor.ACK_DELAY_MILLIS;
+        MessageProcessor.ACK_DELAY_MILLIS = 50;
+        try {
+            ChatModelClient slowChat = (request, context) -> {
+                try {
+                    Thread.sleep(300);
+                } catch (InterruptedException ignored) {
+                    Thread.currentThread().interrupt();
+                }
+                return ChatOutcome.text("慢回复完成");
+            };
+            MessageProcessor slowProcessor = processorWith(slowChat);
+            slowProcessor.process(textMessage("slow-ack", "user-a", "你好"));
+
+            assertTrue(gateway.sentTexts.contains("收到，正在处理，请稍候…"));
+            assertTrue(gateway.sentTexts.contains("慢回复完成"));
+        } finally {
+            MessageProcessor.ACK_DELAY_MILLIS = originalDelay;
+        }
+    }
+
+    @Test
+    void shouldNotSendAckForFastMessages() {
+        long originalDelay = MessageProcessor.ACK_DELAY_MILLIS;
+        MessageProcessor.ACK_DELAY_MILLIS = 1_000;
+        try {
+            processor.process(textMessage("fast-ack", "user-a", "你好"));
+
+            assertEquals(List.of("reply-1"), gateway.sentTexts);
+        } finally {
+            MessageProcessor.ACK_DELAY_MILLIS = originalDelay;
+        }
+    }
+
+    @Test
+    void shouldResumeInterruptedTaskWhenUserSaysContinue() {
+        model.resumeOutcome = new ChatOutcome("已从断点完成任务。", List.of());
+
+        processor.process(textMessage("resume-hit", "user-a", "继续"));
+
+        assertTrue(model.chatRequests.isEmpty());
+        assertEquals(List.of("已从断点完成任务。"), gateway.sentTexts);
+    }
+
+    @Test
+    void shouldFallBackToNormalChatWhenNoCheckpointToResume() {
+        processor.process(textMessage("resume-miss", "user-a", "继续"));
+
+        assertEquals(1, model.chatRequests.size());
+        assertEquals(List.of("reply-1"), gateway.sentTexts);
+    }
+
     private static final class FakeModel implements
             ChatModelClient,
             ImageGenerationClient,
@@ -436,7 +511,14 @@ class MessageProcessorTest {
         private boolean failImage;
         private boolean failTts;
         private ChatOutcome nextOutcome;
+        private ChatOutcome resumeOutcome;
         private ToolContext lastToolContext;
+
+        @Override
+        public Optional<ChatOutcome> resume(ToolContext context) {
+            lastToolContext = context;
+            return resumeOutcome == null ? Optional.empty() : Optional.of(resumeOutcome);
+        }
 
         @Override
         public ChatOutcome chat(ChatRequest request, ToolContext context) {
@@ -491,7 +573,7 @@ class MessageProcessorTest {
 
     private static final class FakeGateway implements WechatGateway {
 
-        private final List<String> sentTexts = new ArrayList<>();
+        private final List<String> sentTexts = new java.util.concurrent.CopyOnWriteArrayList<>();
         private final List<byte[]> sentImages = new ArrayList<>();
         private final List<byte[]> sentVoices = new ArrayList<>();
 

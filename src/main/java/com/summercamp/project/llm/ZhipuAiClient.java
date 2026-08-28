@@ -9,6 +9,7 @@ import com.summercamp.project.config.AiChatProperties;
 import com.summercamp.project.intent.IntentClassificationClient;
 import com.summercamp.project.intent.IntentResult;
 import com.summercamp.project.intent.IntentType;
+import com.summercamp.project.llm.CheckpointStore.TaskCheckpoint;
 import com.summercamp.project.speech.PreparedAudio;
 import com.summercamp.project.speech.SpeechRecognitionException;
 import com.summercamp.project.speech.SpeechToTextClient;
@@ -18,6 +19,7 @@ import com.summercamp.project.tool.ToolDefinition;
 import com.summercamp.project.tool.ToolContext;
 import com.summercamp.project.tool.ToolRegistry;
 import com.summercamp.project.tool.ToolResult;
+import com.summercamp.project.tool.ToolSelector;
 import com.summercamp.project.weather.WeatherPeriod;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -38,6 +40,7 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.stream.Stream;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -70,9 +73,11 @@ public class ZhipuAiClient implements
             工具返回 success=false 时，简洁说明失败原因；天气工具成功时必须保持数值和发布时间准确。
             不要声称执行了实际上没有执行的操作。
             """;
-    private static final int MAX_ATTEMPTS = 2;
+    private static final int MAX_ATTEMPTS = 3;
     private static final int MAX_TOOL_ROUNDS = 5;
     private static final int MAX_TOOL_CALLS_PER_ROUND = 4;
+    /** 模型偶发返回空文本（如只输出推理过程）时，对同一轮请求自动重试的次数。 */
+    private static final int MAX_EMPTY_TEXT_RETRIES = 1;
     private static final int MAX_PROVIDER_ERROR_LENGTH = 240;
     private static final int MAX_IMAGE_CONTEXT_MESSAGES = 4;
     private static final int MAX_IMAGE_CONTEXT_CHARS = 2_000;
@@ -92,18 +97,24 @@ public class ZhipuAiClient implements
     private final HttpClient httpClient;
     private final WechatAudioConverter audioConverter;
     private final ToolRegistry toolRegistry;
+    private final ToolSelector toolSelector;
+    private final CheckpointStore checkpointStore;
 
     public ZhipuAiClient(
             AiChatProperties properties,
             ObjectMapper objectMapper,
             HttpClient httpClient,
             WechatAudioConverter audioConverter,
-            ToolRegistry toolRegistry) {
+            ToolRegistry toolRegistry,
+            ToolSelector toolSelector,
+            CheckpointStore checkpointStore) {
         this.properties = properties;
         this.objectMapper = objectMapper;
         this.httpClient = httpClient;
         this.audioConverter = audioConverter;
         this.toolRegistry = toolRegistry;
+        this.toolSelector = toolSelector;
+        this.checkpointStore = checkpointStore;
     }
 
     @Override
@@ -113,7 +124,10 @@ public class ZhipuAiClient implements
         for (int index = 0; index < models.size(); index++) {
             String model = models.get(index);
             try {
-                return chatWithModel(request, model, context);
+                ChatOutcome outcome = chatWithModel(request, model, context);
+                // 新消息成功处理即视为取代旧的断点，清除待续跑状态
+                checkpointStore.clear(context == null ? null : context.userId());
+                return outcome;
             } catch (ZhipuHttpException exception) {
                 lastFailure = exception;
                 if (canTryFallback(exception.statusCode())
@@ -125,25 +139,108 @@ public class ZhipuAiClient implements
                     continue;
                 }
                 throw exception;
+            } catch (EmptyTextException exception) {
+                // 模型多次返回空文本（如只输出推理过程）时也切换到备用模型，避免直接报错
+                lastFailure = exception;
+                if (index + 1 < models.size()) {
+                    LOGGER.warn("智谱模型 {} 返回空文本，将尝试备用模型 {}",
+                            model, models.get(index + 1));
+                    continue;
+                }
+                throw exception;
             }
         }
         throw lastFailure == null ? new LlmException("没有可用的智谱模型") : lastFailure;
     }
 
+    /**
+     * 从断点继续执行上次失败的工具链：恢复保存的请求快照与轮次，
+     * 不重复执行已完成的工具；续跑失败保留断点，可再次尝试。
+     */
+    @Override
+    public Optional<ChatOutcome> resume(ToolContext context) {
+        String userId = context == null ? null : context.userId();
+        Optional<TaskCheckpoint> checkpoint = checkpointStore.load(userId);
+        if (checkpoint.isEmpty()) {
+            return Optional.empty();
+        }
+        TaskCheckpoint saved = checkpoint.get();
+        try {
+            ChatOutcome outcome = runToolLoop(
+                    saved.payload(), saved.round(), saved.model(), context, saved.withImages());
+            checkpointStore.clear(userId);
+            return Optional.of(outcome);
+        } catch (LlmException exception) {
+            LOGGER.warn("断点续跑失败（{}）：{}", userId, exception.getMessage());
+            return Optional.empty();
+        }
+    }
+
     private ChatOutcome chatWithModel(ChatRequest request, String model, ToolContext context) {
+        long startedAt = System.nanoTime();
+        ChatOutcome outcome = chatWithModelInternal(request, model, context);
+        LOGGER.info("模型对话完成 model={} 耗时={}ms",
+                model, (System.nanoTime() - startedAt) / 1_000_000);
+        return outcome;
+    }
+
+    private ChatOutcome chatWithModelInternal(ChatRequest request, String model, ToolContext context) {
         ObjectNode payload = buildChatPayload(request, model);
+        return runToolLoop(payload, 0, model, context, !request.images().isEmpty());
+    }
+
+    /**
+     * 工具循环：反复请求模型并执行工具直到产出最终回答。
+     * 任一环节遇到可恢复失败（限流/超时/空文本）时保存断点快照，供用户回复"继续"续跑。
+     */
+    private ChatOutcome runToolLoop(
+            ObjectNode payload,
+            int startRound,
+            String model,
+            ToolContext context,
+            boolean withImages) {
         List<ChatOutcome.Media> media = new ArrayList<>();
-        for (int round = 0; round <= MAX_TOOL_ROUNDS; round++) {
-            JsonNode response = executeJson(properties.chatEndpoint(), payload);
+        int emptyTextRetries = 0;
+        String previousToolKey = null;
+        for (int round = startRound; round <= MAX_TOOL_ROUNDS; round++) {
+            JsonNode response;
+            try {
+                response = executeJson(properties.chatEndpoint(), payload);
+            } catch (LlmException exception) {
+                checkpointStore.save(
+                        context == null ? null : context.userId(), model, payload, round, withImages);
+                throw exception;
+            }
             List<ModelToolCall> toolCalls = extractToolCalls(response);
             if (toolCalls.isEmpty()) {
                 String answer = extractOutputText(response);
                 if (answer == null || answer.isBlank()) {
-                    throw new LlmException("智谱响应中没有可用文本");
+                    // 模型偶发返回空文本（如只输出推理过程），对同一轮请求自动重试一次，避免用户干等重试
+                    if (emptyTextRetries < MAX_EMPTY_TEXT_RETRIES) {
+                        emptyTextRetries++;
+                        LOGGER.warn("智谱响应中没有可用文本，第 {} 次自动重试", emptyTextRetries);
+                        pauseBeforeRetry(1);
+                        round--;
+                        continue;
+                    }
+                    checkpointStore.save(
+                            context == null ? null : context.userId(), model, payload, round, withImages);
+                    throw new EmptyTextException("智谱响应中没有可用文本");
                 }
                 return new ChatOutcome(answer.strip(), media);
             }
-            if (!request.images().isEmpty()) {
+            // 连续两轮请求同一个工具且参数相同，判定为模型循环，提前终止，避免浪费轮次
+            if (toolCalls.size() == 1) {
+                ModelToolCall call = toolCalls.getFirst();
+                String key = call.name() + "\u0000" + call.arguments();
+                if (key.equals(previousToolKey)) {
+                    throw new LlmException("模型重复请求相同工具调用，已提前终止");
+                }
+                previousToolKey = key;
+            } else {
+                previousToolKey = null;
+            }
+            if (withImages) {
                 throw new LlmException("视觉模型返回了不支持的工具调用");
             }
             if (round >= MAX_TOOL_ROUNDS) {
@@ -304,7 +401,7 @@ public class ZhipuAiClient implements
 
         if (request.images().isEmpty() && !toolRegistry.definitions().isEmpty()) {
             ArrayNode tools = root.putArray("tools");
-            for (ToolDefinition definition : toolRegistry.definitions()) {
+            for (ToolDefinition definition : selectedTools(request)) {
                 tools.add(definition.toApiJson(objectMapper));
             }
             root.put("tool_choice", "auto");
@@ -344,6 +441,19 @@ public class ZhipuAiClient implements
                 .put("type", "text")
                 .put("text", text);
         return root;
+    }
+
+    /**
+     * 选择注入本次请求的工具：未命中工具触发词且开启了工具过滤时，只注入常备工具集，
+     * 显著减少普通聊天的 prompt 体积；其余情况注入全部工具，保证多步链路完整。
+     */
+    private List<ToolDefinition> selectedTools(ChatRequest request) {
+        if (!properties.toolFilterEnabled() || toolSelector.needsFullTools(request.text())) {
+            return toolRegistry.definitions();
+        }
+        return toolRegistry.definitions().stream()
+                .filter(definition -> ToolSelector.ALWAYS_TOOLS.contains(definition.name()))
+                .toList();
     }
 
     private List<ModelToolCall> extractToolCalls(JsonNode response) {
@@ -495,7 +605,7 @@ public class ZhipuAiClient implements
                     return parseJsonResponse(response.body());
                 }
                 if (attempt < MAX_ATTEMPTS && isRetryable(response.statusCode())) {
-                    pauseBeforeRetry();
+                    pauseBeforeRetry(attempt);
                     continue;
                 }
                 throw new ZhipuHttpException(
@@ -505,12 +615,12 @@ public class ZhipuAiClient implements
                 if (attempt == MAX_ATTEMPTS) {
                     throw new LlmException("智谱接口请求超时", exception);
                 }
-                pauseBeforeRetry();
+                pauseBeforeRetry(attempt);
             } catch (IOException exception) {
                 if (attempt == MAX_ATTEMPTS) {
                     throw new LlmException("无法连接智谱接口", exception);
                 }
-                pauseBeforeRetry();
+                pauseBeforeRetry(attempt);
             } catch (InterruptedException exception) {
                 Thread.currentThread().interrupt();
                 throw new LlmException("智谱接口请求被中断", exception);
@@ -525,7 +635,7 @@ public class ZhipuAiClient implements
         byte[] body = buildMultipartBody(boundary, audio);
         for (int attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
             HttpRequest request = HttpRequest.newBuilder(endpoint)
-                    .timeout(properties.timeout())
+                    .timeout(properties.asrTimeout())
                     .header("Authorization", "Bearer " + properties.apiKey())
                     .header("Content-Type", "multipart/form-data; boundary=" + boundary)
                     .POST(HttpRequest.BodyPublishers.ofByteArray(body))
@@ -538,7 +648,7 @@ public class ZhipuAiClient implements
                     return parseJsonResponse(response.body());
                 }
                 if (attempt < MAX_ATTEMPTS && isRetryable(response.statusCode())) {
-                    pauseBeforeRetry();
+                    pauseBeforeRetry(attempt);
                     continue;
                 }
                 throw new ZhipuHttpException(
@@ -548,12 +658,12 @@ public class ZhipuAiClient implements
                 if (attempt == MAX_ATTEMPTS) {
                     throw new LlmException("智谱 ASR 请求超时", exception);
                 }
-                pauseBeforeRetry();
+                pauseBeforeRetry(attempt);
             } catch (IOException exception) {
                 if (attempt == MAX_ATTEMPTS) {
                     throw new LlmException("无法连接智谱 ASR 接口", exception);
                 }
-                pauseBeforeRetry();
+                pauseBeforeRetry(attempt);
             } catch (InterruptedException exception) {
                 Thread.currentThread().interrupt();
                 throw new LlmException("智谱 ASR 请求被中断", exception);
@@ -624,7 +734,7 @@ public class ZhipuAiClient implements
         }
 
         HttpRequest request = HttpRequest.newBuilder(uri)
-                .timeout(properties.timeout())
+                .timeout(properties.imageTimeout())
                 .GET()
                 .build();
         try {
@@ -739,9 +849,12 @@ public class ZhipuAiClient implements
         }
     }
 
-    private void pauseBeforeRetry() {
+    private void pauseBeforeRetry(int attempt) {
+        // 指数退避 + 随机抖动：500ms → 1000ms → 2000ms，封顶 4s，缓解限流时多用户同时重试
+        long base = Math.min(500L * (1L << Math.max(0, attempt - 1)), 4_000L);
+        long jitter = ThreadLocalRandom.current().nextLong(0, 201);
         try {
-            Thread.sleep(500);
+            Thread.sleep(base + jitter);
         } catch (InterruptedException exception) {
             Thread.currentThread().interrupt();
             throw new LlmException("智谱接口重试被中断", exception);

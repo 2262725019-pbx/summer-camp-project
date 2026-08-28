@@ -115,6 +115,22 @@ class IntentRecognizerTest {
     }
 
     @Test
+    void genericActionableMessagesSkipTheClassifier() {
+        AtomicInteger calls = new AtomicInteger();
+        IntentRecognizer recognizer = new IntentRecognizer(text -> {
+            calls.incrementAndGet();
+            return Optional.of(IntentResult.weather("北京", WeatherPeriod.TODAY));
+        });
+
+        // 纯“帮我/看看”等口吻，无强工具意图词：直接按普通聊天处理，不调用模型分类
+        assertEquals(IntentType.CHAT, recognizer.recognize("帮我看看这个项目怎么样").type());
+        assertEquals(0, calls.get());
+        // 含强意图词（查询）时仍调用模型分类
+        assertEquals(IntentType.WEATHER, recognizer.recognize("帮我查询一下北京的情况").type());
+        assertEquals(1, calls.get());
+    }
+
+    @Test
     void clearAndImageAnalysisRequestsAreDeterministic() {
         IntentRecognizer recognizer = new IntentRecognizer(text -> Optional.empty());
 

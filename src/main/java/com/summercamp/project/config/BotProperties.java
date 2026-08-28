@@ -13,7 +13,8 @@ public record BotProperties(
         String voiceReplyMode,
         Path qrCodePath,
         boolean qrCodeAutoOpen,
-        Duration pollRetryDelay) {
+        Duration pollRetryDelay,
+        int messagePoolSize) {
 
     public void validate() {
         if (imageMaxBytes <= 0) {
@@ -34,6 +35,9 @@ public record BotProperties(
         }
         if (pollRetryDelay == null || pollRetryDelay.isNegative()) {
             throw new IllegalStateException("BOT_POLL_RETRY_DELAY 配置无效");
+        }
+        if (messagePoolSize <= 0) {
+            throw new IllegalStateException("BOT_MESSAGE_POOL_SIZE 必须大于 0");
         }
     }
 

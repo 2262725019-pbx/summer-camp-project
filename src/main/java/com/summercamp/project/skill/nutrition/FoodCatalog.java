@@ -41,6 +41,13 @@ public class FoodCatalog {
         return food;
     }
 
+    /** 按分类列出食物（carbohydrate/protein/vegetable/fruit/fat），用于组合每日菜单。 */
+    public List<FoodItem> byCategory(String category) {
+        return foods.values().stream()
+                .filter(food -> food.category().equals(category))
+                .toList();
+    }
+
     public int size() {
         return foods.size();
     }

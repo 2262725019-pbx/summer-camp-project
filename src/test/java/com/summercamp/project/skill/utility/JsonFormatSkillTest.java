@@ -28,6 +28,15 @@ class JsonFormatSkillTest {
         assertEquals(SkillResult.Status.COMPLETED, skill.execute(context("{\"ok\":true}")).status());
     }
 
+    @Test
+    void shouldReplyInvalidJsonWithoutEnteringWaitingState() {
+        SkillResult result = skill.execute(context("JSON格式化：{\"a\":1,}"));
+
+        // 非法 JSON 直接结束，不进入待补充状态，避免劫持后续消息
+        assertEquals(SkillResult.Status.COMPLETED, result.status());
+        assertTrue(result.reply().contains("JSON 格式不合法"));
+    }
+
     private SkillContext context(String text) {
         return new SkillContext("user-a", text, List.of(), false);
     }

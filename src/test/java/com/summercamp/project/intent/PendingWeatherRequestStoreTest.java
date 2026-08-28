@@ -4,13 +4,18 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.summercamp.project.weather.WeatherPeriod;
+import java.nio.file.Path;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 class PendingWeatherRequestStoreTest {
+
+    @TempDir
+    Path tempDir;
 
     @Test
     void consumesPendingRequestWithinFiveMinutes() {
@@ -31,6 +36,19 @@ class PendingWeatherRequestStoreTest {
         clock.instant = start.plusSeconds(301);
 
         assertTrue(store.consume("user-1").isEmpty());
+    }
+
+    @Test
+    void shouldPersistPendingRequestAcrossInstances() {
+        Instant now = Instant.parse("2026-08-18T03:00:00Z");
+        Clock clock = Clock.fixed(now, ZoneOffset.UTC);
+        String file = tempDir.resolve("pending-weather.json").toString();
+
+        PendingWeatherRequestStore first = new PendingWeatherRequestStore(clock, file);
+        first.remember("user-1", WeatherPeriod.TOMORROW);
+
+        PendingWeatherRequestStore second = new PendingWeatherRequestStore(clock, file);
+        assertEquals(WeatherPeriod.TOMORROW, second.consume("user-1").orElseThrow());
     }
 
     private static final class MutableClock extends Clock {

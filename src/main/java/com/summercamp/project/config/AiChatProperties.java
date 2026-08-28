@@ -19,7 +19,10 @@ public record AiChatProperties(
         String imageModel,
         String imageSize,
         String asrModel,
-        Duration timeout) {
+        Duration timeout,
+        Duration asrTimeout,
+        Duration imageTimeout,
+        boolean toolFilterEnabled) {
 
     public URI chatEndpoint() {
         return endpoint(chatApiPath);
@@ -52,6 +55,12 @@ public record AiChatProperties(
         requireText(asrModel, "ZHIPU_ASR_MODEL");
         if (timeout == null || timeout.isNegative() || timeout.isZero()) {
             throw new IllegalStateException("ZHIPU_TIMEOUT 必须大于 0");
+        }
+        if (asrTimeout == null || asrTimeout.isNegative() || asrTimeout.isZero()) {
+            throw new IllegalStateException("ZHIPU_ASR_TIMEOUT 必须大于 0");
+        }
+        if (imageTimeout == null || imageTimeout.isNegative() || imageTimeout.isZero()) {
+            throw new IllegalStateException("ZHIPU_IMAGE_TIMEOUT 必须大于 0");
         }
     }
 

@@ -21,8 +21,10 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.locks.ReentrantLock;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -37,6 +39,8 @@ public class ILinkWechatGateway implements WechatGateway, DisposableBean {
     private final ILinkClient client;
     private final BotProperties properties;
     private final AtomicBoolean closed = new AtomicBoolean();
+    /** 按用户串行发送：回执（message-ack 线程）与结果（消息处理线程）对同一用户按调用顺序送达。 */
+    private final ConcurrentHashMap<String, ReentrantLock> sendLocks = new ConcurrentHashMap<>();
     private Path activeQrCodePath;
 
     @Autowired
@@ -97,13 +101,13 @@ public class ILinkWechatGateway implements WechatGateway, DisposableBean {
 
     @Override
     public void sendText(String userId, String text) throws IOException {
-        client.sendText(userId, text);
+        withSendLock(userId, () -> client.sendText(userId, text));
     }
 
     @Override
     public void sendImage(String userId, byte[] data, String fileName, String caption)
             throws IOException {
-        client.sendImage(userId, data, fileName, caption);
+        withSendLock(userId, () -> client.sendImage(userId, data, fileName, caption));
     }
 
     @Override
@@ -117,11 +121,12 @@ public class ILinkWechatGateway implements WechatGateway, DisposableBean {
             int bitsPerSample,
             String transcript) throws IOException {
         if (properties.sendVoiceAsFile()) {
-            client.sendFile(userId, data, playableAudioFileName(fileName, encodeType), "");
+            withSendLock(userId, () ->
+                    client.sendFile(userId, data, playableAudioFileName(fileName, encodeType), ""));
             LOGGER.info("iLink 原生语音气泡当前投递不稳定，已将回复作为可播放音频文件发送");
             return;
         }
-        client.sendVoice(
+        withSendLock(userId, () -> client.sendVoice(
                 userId,
                 data,
                 fileName,
@@ -130,8 +135,23 @@ public class ILinkWechatGateway implements WechatGateway, DisposableBean {
                 null,
                 encodeType,
                 bitsPerSample,
-                transcript);
+                transcript));
         LOGGER.warn("已向 iLink 提交原生语音气泡；接口成功不代表微信客户端一定完成投递");
+    }
+
+    private void withSendLock(String userId, IoAction action) throws IOException {
+        ReentrantLock lock = sendLocks.computeIfAbsent(userId, ignored -> new ReentrantLock());
+        lock.lock();
+        try {
+            action.run();
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    @FunctionalInterface
+    private interface IoAction {
+        void run() throws IOException;
     }
 
     private String playableAudioFileName(String fileName, int encodeType) {

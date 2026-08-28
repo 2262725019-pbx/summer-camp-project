@@ -29,6 +29,9 @@ class ReminderSubscriptionSkillTest {
         assertTrue(skill.matchScore("订阅健康提醒") > 0);
         assertTrue(skill.matchScore("退订提醒") > 0);
         assertTrue(skill.matchScore("我的订阅") > 0);
+        assertTrue(skill.matchScore("订阅午餐菜单") > 0);
+        assertTrue(skill.matchScore("取消午餐菜单") > 0);
+        assertTrue(skill.matchScore("午餐菜单改到12点") > 0);
         assertEquals(0, skill.matchScore("今天天气怎么样"));
         assertEquals(0, skill.matchScore("帮我制定健康生活规划"));
     }
@@ -110,6 +113,58 @@ class ReminderSubscriptionSkillTest {
         SkillResult summary = skill.execute(context("我的订阅"));
         assertTrue(summary.reply().contains("健康提醒"));
         assertFalse(summary.reply().contains("订阅成功"));
+    }
+
+    @Test
+    void shouldSubscribeLunchMenuWithNaturalTime() {
+        ReminderSubscriptionManager manager =
+                new ReminderSubscriptionManager(new ObjectMapper(), tempDir.resolve("subs.json").toString());
+        ReminderSubscriptionSkill skill = new ReminderSubscriptionSkill(manager);
+
+        SkillResult result = skill.execute(context("每天12点自动生成当天的午餐菜单"));
+
+        assertEquals(SkillResult.Status.COMPLETED, result.status());
+        assertTrue(result.reply().contains("午餐菜单（每天 12:00）"));
+        assertTrue(manager.find("user-a").orElseThrow().lunchMenu());
+        assertEquals("12:00", manager.find("user-a").orElseThrow().lunchMenuTime());
+    }
+
+    @Test
+    void shouldSubscribeLunchMenuAtCustomTime() {
+        ReminderSubscriptionManager manager =
+                new ReminderSubscriptionManager(new ObjectMapper(), tempDir.resolve("subs.json").toString());
+        ReminderSubscriptionSkill skill = new ReminderSubscriptionSkill(manager);
+
+        SkillResult result = skill.execute(context("订阅午餐菜单 12点半"));
+
+        assertTrue(result.reply().contains("午餐菜单（每天 12:30）"));
+        assertEquals("12:30", manager.find("user-a").orElseThrow().lunchMenuTime());
+    }
+
+    @Test
+    void shouldCancelLunchMenu() {
+        ReminderSubscriptionManager manager =
+                new ReminderSubscriptionManager(new ObjectMapper(), tempDir.resolve("subs.json").toString());
+        ReminderSubscriptionSkill skill = new ReminderSubscriptionSkill(manager);
+        skill.execute(context("订阅午餐菜单"));
+
+        SkillResult cancelled = skill.execute(context("取消午餐菜单"));
+
+        assertTrue(cancelled.reply().contains("已取消"));
+        assertTrue(manager.find("user-a").isEmpty());
+    }
+
+    @Test
+    void shouldChangeLunchMenuTime() {
+        ReminderSubscriptionManager manager =
+                new ReminderSubscriptionManager(new ObjectMapper(), tempDir.resolve("subs.json").toString());
+        manager.subscribeLunchMenu("user-a");
+        ReminderSubscriptionSkill skill = new ReminderSubscriptionSkill(manager);
+
+        SkillResult changed = skill.execute(context("午餐菜单改到12点半"));
+
+        assertTrue(changed.reply().contains("12:30"));
+        assertEquals("12:30", manager.find("user-a").orElseThrow().lunchMenuTime());
     }
 
     private SkillContext context(String text) {

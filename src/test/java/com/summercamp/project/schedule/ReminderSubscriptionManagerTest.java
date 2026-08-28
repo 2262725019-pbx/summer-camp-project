@@ -109,4 +109,55 @@ class ReminderSubscriptionManagerTest {
         assertTrue(summary.contains("北京 天气播报（每天 08:00）"));
         assertTrue(summary.contains("健康提醒（每天 21:30）"));
     }
+
+    @Test
+    void shouldSubscribeAndUnsubscribeLunchMenuIndependently() {
+        ReminderSubscriptionManager manager = manager();
+        manager.subscribeWeather("user-1", "北京");
+        manager.subscribeLunchMenu("user-1", "12:00");
+
+        Subscription subscription = manager.find("user-1").orElseThrow();
+        assertTrue(subscription.lunchMenu());
+        assertEquals("12:00", subscription.lunchMenuTime());
+        assertEquals("北京", subscription.city());
+
+        assertTrue(manager.unsubscribeLunchMenu("user-1"));
+        Subscription after = manager.find("user-1").orElseThrow();
+        assertFalse(after.lunchMenu());
+        assertEquals("北京", after.city());
+        assertFalse(manager.unsubscribeLunchMenu("user-9"));
+    }
+
+    @Test
+    void shouldListLunchMenuSubscribersOnly() {
+        ReminderSubscriptionManager manager = manager();
+        manager.subscribeLunchMenu("user-1");
+        manager.subscribeWeather("user-2", "上海");
+        manager.subscribeHealth("user-3", "减脂", 1797);
+
+        assertEquals(Set.of("user-1"),
+                manager.allLunchMenuSubscribers().stream().map(Subscription::userId).collect(Collectors.toSet()));
+    }
+
+    @Test
+    void shouldPersistLunchMenuSubscription() {
+        String file = tempDir.resolve("subs.json").toString();
+        ReminderSubscriptionManager first = new ReminderSubscriptionManager(new ObjectMapper(), file);
+        first.subscribeLunchMenu("user-1", "12:30");
+
+        ReminderSubscriptionManager second = new ReminderSubscriptionManager(new ObjectMapper(), file);
+        Subscription reloaded = second.find("user-1").orElseThrow();
+        assertTrue(reloaded.lunchMenu());
+        assertEquals("12:30", reloaded.lunchMenuTime());
+    }
+
+    @Test
+    void shouldUpdateLunchMenuTimeOnlyWhenSubscribed() {
+        ReminderSubscriptionManager manager = manager();
+        manager.subscribeLunchMenu("user-1");
+
+        assertTrue(manager.updateLunchMenuTime("user-1", "12:30"));
+        assertEquals("12:30", manager.find("user-1").orElseThrow().lunchMenuTime());
+        assertFalse(manager.updateLunchMenuTime("user-9", "12:00"));
+    }
 }

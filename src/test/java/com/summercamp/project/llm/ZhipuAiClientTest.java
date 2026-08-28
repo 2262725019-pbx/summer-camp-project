@@ -27,6 +27,7 @@ import com.summercamp.project.tool.ToolContext;
 import com.summercamp.project.tool.ToolDefinition;
 import com.summercamp.project.tool.ToolRegistry;
 import com.summercamp.project.tool.ToolResult;
+import com.summercamp.project.tool.ToolSelector;
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import java.net.http.HttpHeaders;
@@ -61,6 +62,18 @@ class ZhipuAiClientTest {
     }
 
     private ZhipuAiClient newClient(HttpClient httpClient, ToolRegistry toolRegistry) {
+        return newClient(httpClient, toolRegistry,
+                new CheckpointStore(objectMapper, null, java.time.Clock.systemUTC()));
+    }
+
+    private ZhipuAiClient newClient(HttpClient httpClient, CheckpointStore checkpointStore) {
+        return newClient(
+                httpClient,
+                new ToolRegistry(List.of(new CalculatorTool(objectMapper)), objectMapper),
+                checkpointStore);
+    }
+
+    private ZhipuAiClient newClient(HttpClient httpClient, ToolRegistry toolRegistry, CheckpointStore checkpointStore) {
         AiChatProperties properties = new AiChatProperties(
                 "https://open.bigmodel.cn/api/paas/v4",
                 "/chat/completions",
@@ -74,13 +87,18 @@ class ZhipuAiClientTest {
                 "image-model",
                 "1024x1024",
                 "asr-model",
-                Duration.ofSeconds(10));
+                Duration.ofSeconds(10),
+                Duration.ofSeconds(30),
+                Duration.ofSeconds(30),
+                true);
         return new ZhipuAiClient(
                 properties,
                 objectMapper,
                 httpClient,
                 new WechatAudioConverter(),
-                toolRegistry);
+                toolRegistry,
+                new ToolSelector(),
+                checkpointStore);
     }
 
     @Test
@@ -361,7 +379,7 @@ class ZhipuAiClientTest {
 
     @Test
     @SuppressWarnings({"rawtypes", "unchecked"})
-    void shouldStopWhenModelKeepsRequestingTools() throws Exception {
+    void shouldStopWhenModelKeepsRequestingTheSameTool() throws Exception {
         HttpClient httpClient = mock(HttpClient.class);
         HttpResponse<String> toolRequest = mock(HttpResponse.class);
         when(toolRequest.statusCode()).thenReturn(200);
@@ -381,9 +399,115 @@ class ZhipuAiClientTest {
                 () -> toolClient.chat(
                         new ChatRequest(List.of(), "一直调用工具", List.of()),
                         new ToolContext("user-a", "一直调用工具")));
-        verify(httpClient, times(6)).send(
+        // 连续两轮请求同一工具即判定循环：首次请求 + 1 轮工具执行后提前终止
+        verify(httpClient, times(2)).send(
                 any(HttpRequest.class),
                 any(HttpResponse.BodyHandler.class));
+    }
+
+    @Test
+    void shouldRetryOnceWhenModelReturnsEmptyText() throws Exception {
+        HttpClient httpClient = mock(HttpClient.class);
+        HttpResponse<String> empty = mock(HttpResponse.class);
+        HttpResponse<String> answer = mock(HttpResponse.class);
+        when(empty.statusCode()).thenReturn(200);
+        when(empty.body()).thenReturn(
+                "{\"choices\":[{\"message\":{\"role\":\"assistant\",\"content\":null}}]}");
+        when(answer.statusCode()).thenReturn(200);
+        when(answer.body()).thenReturn(
+                "{\"choices\":[{\"message\":{\"role\":\"assistant\",\"content\":\"好的，明白了。\"}}]}");
+        doReturn(empty, answer).when(httpClient).send(
+                any(HttpRequest.class), any(HttpResponse.BodyHandler.class));
+        ZhipuAiClient retryClient = newClient(httpClient);
+
+        ChatOutcome outcome = retryClient.chat(
+                new ChatRequest(List.of(), "你好", List.of()),
+                new ToolContext("user-a", "你好"));
+
+        assertEquals("好的，明白了。", outcome.text());
+        verify(httpClient, times(2)).send(
+                any(HttpRequest.class), any(HttpResponse.BodyHandler.class));
+    }
+
+    @Test
+    void shouldFailAfterEmptyTextRetriesAreExhausted() throws Exception {
+        HttpClient httpClient = mock(HttpClient.class);
+        HttpResponse<String> empty = mock(HttpResponse.class);
+        when(empty.statusCode()).thenReturn(200);
+        when(empty.body()).thenReturn(
+                "{\"choices\":[{\"message\":{\"role\":\"assistant\",\"content\":null}}]}");
+        doReturn(empty).when(httpClient).send(
+                any(HttpRequest.class), any(HttpResponse.BodyHandler.class));
+        ZhipuAiClient retryClient = newClient(httpClient);
+
+        LlmException exception = assertThrows(
+                LlmException.class,
+                () -> retryClient.chat(
+                        new ChatRequest(List.of(), "你好", List.of()),
+                        new ToolContext("user-a", "你好")));
+
+        assertTrue(exception.getMessage().contains("智谱响应中没有可用文本"));
+        // 主模型 + 两个备用模型全部空文本：每个模型首次 + 1 次自动重试，共 6 次请求后降级失败
+        verify(httpClient, times(6)).send(
+                any(HttpRequest.class), any(HttpResponse.BodyHandler.class));
+    }
+
+    @Test
+    void shouldSaveCheckpointOnFailureAndResumeFromIt() throws Exception {
+        HttpClient httpClient = mock(HttpClient.class);
+        HttpResponse<String> empty = mock(HttpResponse.class);
+        HttpResponse<String> answer = mock(HttpResponse.class);
+        when(empty.statusCode()).thenReturn(200);
+        when(empty.body()).thenReturn(
+                "{\"choices\":[{\"message\":{\"role\":\"assistant\",\"content\":null}}]}");
+        when(answer.statusCode()).thenReturn(200);
+        when(answer.body()).thenReturn(
+                "{\"choices\":[{\"message\":{\"role\":\"assistant\",\"content\":\"续跑成功。\"}}]}");
+        // 首次对话三个模型全部返回空文本后失败并保存断点；随后"继续"从断点续跑成功
+        doReturn(empty, empty, empty, empty, empty, empty, answer).when(httpClient).send(
+                any(HttpRequest.class), any(HttpResponse.BodyHandler.class));
+        CheckpointStore store = new CheckpointStore(
+                objectMapper, null, java.time.Clock.systemUTC());
+        ZhipuAiClient client = newClient(httpClient, store);
+
+        assertThrows(
+                LlmException.class,
+                () -> client.chat(
+                        new ChatRequest(List.of(), "你好", List.of()),
+                        new ToolContext("user-a", "你好")));
+        assertTrue(store.load("user-a").isPresent(), "失败后应保存断点");
+
+        ChatOutcome resumed = client.resume(new ToolContext("user-a", "继续")).orElseThrow();
+        assertEquals("续跑成功。", resumed.text());
+        assertTrue(store.load("user-a").isEmpty(), "续跑成功后应清除断点");
+    }
+
+    @Test
+    void shouldReturnEmptyWhenNoCheckpointToResume() {
+        CheckpointStore store = new CheckpointStore(
+                objectMapper, null, java.time.Clock.systemUTC());
+        ZhipuAiClient client = newClient(mock(HttpClient.class), store);
+
+        assertTrue(client.resume(new ToolContext("user-a", "继续")).isEmpty());
+    }
+
+    @Test
+    void shouldClearStaleCheckpointAfterSuccessfulChat() throws Exception {
+        HttpClient httpClient = mock(HttpClient.class);
+        HttpResponse<String> answer = mock(HttpResponse.class);
+        when(answer.statusCode()).thenReturn(200);
+        when(answer.body()).thenReturn(
+                "{\"choices\":[{\"message\":{\"role\":\"assistant\",\"content\":\"正常回答\"}}]}");
+        doReturn(answer).when(httpClient).send(
+                any(HttpRequest.class), any(HttpResponse.BodyHandler.class));
+        CheckpointStore store = new CheckpointStore(
+                objectMapper, null, java.time.Clock.systemUTC());
+        store.save("user-a", "text-model", objectMapper.createObjectNode(), 0, false);
+        ZhipuAiClient client = newClient(httpClient, store);
+
+        client.chat(new ChatRequest(List.of(), "你好", List.of()), new ToolContext("user-a", "你好"));
+
+        assertTrue(store.load("user-a").isEmpty(), "新消息成功后应清除旧断点");
     }
 
     @Test

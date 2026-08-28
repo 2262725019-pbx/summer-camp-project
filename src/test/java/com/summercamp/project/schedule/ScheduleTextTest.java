@@ -39,7 +39,7 @@ class ScheduleTextTest {
 
     @Test
     void healthReminderShouldReferenceGoalAndCaloriesWhenPresent() {
-        Subscription subscription = new Subscription("user-1", true, "减脂", 1797, "北京", null, null, 0);
+        Subscription subscription = new Subscription("user-1", true, "减脂", 1797, "北京", null, null, false, null, 0);
         String message = HealthReminderText.build(subscription);
 
         assertTrue(message.contains("减脂"));
@@ -49,7 +49,7 @@ class ScheduleTextTest {
 
     @Test
     void healthReminderShouldStayGenericWithoutProfile() {
-        Subscription subscription = new Subscription("user-1", true, null, null, null, null, null, 0);
+        Subscription subscription = new Subscription("user-1", true, null, null, null, null, null, false, null, 0);
         String message = HealthReminderText.build(subscription);
 
         assertTrue(!message.contains("千卡"));

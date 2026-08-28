@@ -10,9 +10,9 @@ import java.util.regex.Pattern;
 import org.springframework.stereotype.Component;
 
 /**
- * 订阅/退订定时推送（健康提醒、每日天气播报）的指令入口。
- * 支持指定推送时间："订阅天气 北京 8点""健康提醒改到21:30"，
- * 未指定时间时使用全局默认（07:30 / 21:00）。
+ * 订阅/退订定时推送（健康提醒、每日天气播报、每日午餐菜单）的指令入口。
+ * 支持指定推送时间："订阅天气 北京 8点""健康提醒改到21:30""午餐菜单改到12点"，
+ * 未指定时间时使用全局默认（07:30 / 21:00 / 12:00）。
  */
 @Component
 public class ReminderSubscriptionSkill implements BotSkill {
@@ -22,7 +22,9 @@ public class ReminderSubscriptionSkill implements BotSkill {
     private static final List<String> SUBSCRIBE_WEATHER_TERMS = List.of("订阅天气", "开启天气播报");
     private static final List<String> SUBSCRIBE_HEALTH_TERMS = List.of(
             "订阅健康提醒", "订阅健康", "订阅提醒", "开启健康提醒", "开启提醒");
+    private static final List<String> SUBSCRIBE_LUNCH_TERMS = List.of("订阅午餐", "开启午餐", "午餐菜单");
     private static final List<String> UNSUBSCRIBE_TERMS = List.of("退订", "取消订阅", "取消提醒");
+    private static final List<String> UNSUBSCRIBE_LUNCH_TERMS = List.of("取消午餐", "退订午餐", "关闭午餐", "停止午餐");
     private static final List<String> CHANGE_TERMS = List.of("改到", "改成", "调整到", "调整成");
     private static final List<String> VIEW_TERMS = List.of("我的订阅", "查看订阅", "订阅列表");
 
@@ -66,8 +68,13 @@ public class ReminderSubscriptionSkill implements BotSkill {
                 score = Math.max(score, 50 + term.length());
             }
         }
+        for (String term : UNSUBSCRIBE_LUNCH_TERMS) {
+            if (normalized.contains(term)) {
+                score = Math.max(score, 55 + term.length());
+            }
+        }
         for (String term : CHANGE_TERMS) {
-            if (normalized.contains(term) && containsAny(normalized, List.of("天气", "健康", "提醒"))) {
+            if (normalized.contains(term) && containsAny(normalized, List.of("天气", "健康", "提醒", "午餐"))) {
                 score = Math.max(score, 50 + term.length());
             }
         }
@@ -77,6 +84,11 @@ public class ReminderSubscriptionSkill implements BotSkill {
             }
         }
         for (String term : SUBSCRIBE_HEALTH_TERMS) {
+            if (normalized.contains(term)) {
+                score = Math.max(score, 50 + term.length());
+            }
+        }
+        for (String term : SUBSCRIBE_LUNCH_TERMS) {
             if (normalized.contains(term)) {
                 score = Math.max(score, 50 + term.length());
             }
@@ -94,6 +106,12 @@ public class ReminderSubscriptionSkill implements BotSkill {
             return SkillResult.completed(subscriptions.summary(userId));
         }
 
+        if (containsAny(normalized, UNSUBSCRIBE_LUNCH_TERMS)) {
+            return subscriptions.unsubscribeLunchMenu(userId)
+                    ? SkillResult.completed("已取消每日午餐菜单推送。")
+                    : SkillResult.completed("你当前没有订阅每日午餐菜单。");
+        }
+
         if (containsAny(normalized, UNSUBSCRIBE_TERMS)) {
             return handleUnsubscribe(normalized, userId);
         }
@@ -102,15 +120,20 @@ public class ReminderSubscriptionSkill implements BotSkill {
             return handleChange(normalized, text, userId);
         }
 
+        boolean lunch = containsAny(normalized, SUBSCRIBE_LUNCH_TERMS);
         boolean weather = containsAny(normalized, SUBSCRIBE_WEATHER_TERMS);
         boolean health = containsAny(normalized, SUBSCRIBE_HEALTH_TERMS);
-        if (!weather && !health) {
+        if (!lunch && !weather && !health) {
             return SkillResult.completed(
-                    "可以发送“订阅天气 北京”“订阅健康提醒”或“退订提醒”来管理定时推送；"
-                            + "订阅时可指定时间，如“订阅天气 北京 8点”“健康提醒改到21:30”。");
+                    "可以发送“订阅天气 北京”“订阅健康提醒”“订阅午餐菜单”或“退订提醒”来管理定时推送；"
+                            + "订阅时可指定时间，如“订阅天气 北京 8点”“健康提醒改到21:30”“午餐菜单改到12点”。");
         }
 
         List<String> done = new java.util.ArrayList<>();
+        if (lunch) {
+            subscriptions.subscribeLunchMenu(userId, parseTime(text));
+            done.add("午餐菜单（每天 " + timeText(parseTime(text), "12:00") + "）");
+        }
         if (health) {
             subscriptions.subscribeHealth(userId, null, null, parseTime(text));
             done.add("健康提醒（每天 " + timeText(parseTime(text), "21:00") + "）");
@@ -118,19 +141,43 @@ public class ReminderSubscriptionSkill implements BotSkill {
         if (weather) {
             String city = extractCity(text);
             if (city == null) {
-                return SkillResult.completed(health
-                        ? "健康提醒已开启。请告诉我要订阅天气的城市，例如：订阅天气 北京。"
+                return SkillResult.completed(health || lunch
+                        ? "已开启。请告诉我要订阅天气的城市，例如：订阅天气 北京。"
                         : "请告诉我要订阅天气的城市，例如：订阅天气 北京 8点。");
             }
             subscriptions.subscribeWeather(userId, city, parseTime(text));
             done.add(city + " 天气播报（每天 " + timeText(parseTime(text), "07:30") + "）");
         }
         return SkillResult.completed(
-                "订阅成功：" + String.join("、", done) + "。发送“退订提醒”可取消，发送“健康提醒改到21:30”可改时间。");
+                "订阅成功：" + String.join("、", done) + "。" + guideHint(lunch, weather, health));
+    }
+
+    /** 按本次订阅的类型生成对应的取消/改时提示，避免给出与订阅无关的指令。 */
+    private String guideHint(boolean lunch, boolean weather, boolean health) {
+        StringBuilder hint = new StringBuilder();
+        if (lunch) {
+            hint.append("发送“取消午餐菜单”可取消，“午餐菜单改到12点”可改时间。");
+        }
+        if (weather) {
+            if (hint.length() > 0) {
+                hint.append(' ');
+            }
+            hint.append("发送“退订天气”可取消，“天气播报改到8点”可改时间。");
+        }
+        if (health) {
+            if (hint.length() > 0) {
+                hint.append(' ');
+            }
+            hint.append("发送“退订提醒”可取消，“健康提醒改到21:30”可改时间。");
+        }
+        return hint.length() > 0 ? hint.toString() : "发送“退订提醒”可管理订阅。";
     }
 
     private SkillResult handleUnsubscribe(String normalized, String userId) {
         List<String> done = new java.util.ArrayList<>();
+        if (normalized.contains("午餐") && subscriptions.unsubscribeLunchMenu(userId)) {
+            done.add("午餐菜单");
+        }
         if (normalized.contains("天气") && subscriptions.unsubscribeWeather(userId)) {
             done.add("天气播报");
         }
@@ -141,11 +188,15 @@ public class ReminderSubscriptionSkill implements BotSkill {
         if (done.isEmpty()) {
             boolean weather = subscriptions.unsubscribeWeather(userId);
             boolean health = subscriptions.unsubscribeHealth(userId);
+            boolean lunch = subscriptions.unsubscribeLunchMenu(userId);
             if (weather) {
                 done.add("天气播报");
             }
             if (health) {
                 done.add("健康提醒");
+            }
+            if (lunch) {
+                done.add("午餐菜单");
             }
         }
         return done.isEmpty()
@@ -156,7 +207,12 @@ public class ReminderSubscriptionSkill implements BotSkill {
     private SkillResult handleChange(String normalized, String text, String userId) {
         String time = parseTime(text);
         if (time == null) {
-            return SkillResult.completed("请给出修改后的时间，例如：健康提醒改到21:30，或 天气播报改到8点。");
+            return SkillResult.completed("请给出修改后的时间，例如：健康提醒改到21:30，或 午餐菜单改到12点。");
+        }
+        if (normalized.contains("午餐")) {
+            return subscriptions.updateLunchMenuTime(userId, time)
+                    ? SkillResult.completed("午餐菜单推送时间已改为每天 " + time + "。")
+                    : SkillResult.completed("你还没有订阅午餐菜单，可先发送“订阅午餐菜单”。");
         }
         if (normalized.contains("天气")) {
             return subscriptions.updateWeatherDigestTime(userId, time)

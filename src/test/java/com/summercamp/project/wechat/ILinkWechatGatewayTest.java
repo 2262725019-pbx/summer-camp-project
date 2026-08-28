@@ -21,7 +21,8 @@ class ILinkWechatGatewayTest {
                 "file",
                 Path.of("runtime", "wechat-login-qr.png"),
                 false,
-                Duration.ofSeconds(2));
+                Duration.ofSeconds(2),
+                4);
         ILinkClient client = mock(ILinkClient.class);
 
         ILinkWechatGateway gateway = new ILinkWechatGateway(properties, client);

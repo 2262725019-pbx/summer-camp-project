@@ -56,6 +56,14 @@ public class IntentRecognizer {
             "天气之子|(?:今天)?天气(?:真|太|很|挺)(?:好|不错|糟|差)[。！!]*$");
     private static final Pattern ACTIONABLE_WORDS = Pattern.compile(
             "天气|气温|温度|下雨|下雪|带伞|预报|生成|创作|画|绘制|识别|分析|图片|照片|查询|帮我");
+    /** 明确指向工具意图的强信号词；命中才调用模型意图分类，其余“帮我/看看”等口吻默认按普通聊天处理。 */
+    private static final Pattern STRONG_INTENT_WORDS = Pattern.compile(
+            "天气|气温|温度|多少度|下雨|下雪|带伞|降雨|降雪|预报|冷不冷|热不热"
+                    + "|图片|图像|照片|生成|创作|绘制|识别|分析|海报"
+                    + "|计算|算一下|算一算|算出|等于多少"
+                    + "|待办|提醒|记一下|二维码"
+                    + "|几点|几号|日期|星期|周几|时间"
+                    + "|查询|查一下|查查");
     private static final Pattern IMAGE_TOOL_WORDS = Pattern.compile(
             "生成.{0,8}(?:图片|图像|图画)|画(?:一张|一幅|个)?|绘制|创作.{0,8}(?:图片|图像|图画)");
     private static final Pattern TODO_TOOL_WORDS = Pattern.compile(
@@ -112,10 +120,14 @@ public class IntentRecognizer {
             return IntentResult.weather(extractWeatherLocation(command), weatherPeriod(command));
         }
         if (ACTIONABLE_WORDS.matcher(command).find()) {
-            try {
-                return classificationClient.classify(command).orElseGet(IntentResult::chat);
-            } catch (RuntimeException exception) {
-                LOGGER.warn("模型意图分类失败，按普通聊天处理：{}", exception.getMessage());
+            // 仅当存在明确的工具意图信号时才调用模型意图分类；纯"帮我/看看/一下"等口吻
+            // 的消息直接按普通聊天处理，省掉一次额外的 LLM 调用
+            if (STRONG_INTENT_WORDS.matcher(command).find()) {
+                try {
+                    return classificationClient.classify(command).orElseGet(IntentResult::chat);
+                } catch (RuntimeException exception) {
+                    LOGGER.warn("模型意图分类失败，按普通聊天处理：{}", exception.getMessage());
+                }
             }
         }
         return IntentResult.chat();

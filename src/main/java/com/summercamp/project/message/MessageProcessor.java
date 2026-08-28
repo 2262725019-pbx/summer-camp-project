@@ -35,16 +35,27 @@ import com.summercamp.project.wechat.WechatGateway;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
+import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.TimeUnit;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.DisposableBean;
 import org.springframework.stereotype.Component;
 
 @Component
-public class MessageProcessor {
+public class MessageProcessor implements DisposableBean {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(MessageProcessor.class);
     private static final int TTS_CHUNK_MAX_CHARS = 1_000;
+    /** 慢请求回执延迟：处理超过该时长仍未完成时，先发一条“正在处理”提示（测试可调小）。 */
+    static long ACK_DELAY_MILLIS = 2_000;
+    private static final String ACK_TEXT = "收到，正在处理，请稍候…";
     private static final String HELP_TEXT = """
             可用功能：
             1. 发送文字：连续对话，机器人会记住最近上下文
@@ -64,9 +75,10 @@ public class MessageProcessor {
                 生成包含饮食、运动、作息的完整健康生活规划书并加入待办，自动开启每日健康提醒
             15. 发送“订阅天气 北京”或“退订提醒”：管理每日天气播报（07:30）与健康打卡提醒（21:00）
             16. 发送“明天上午10点提醒我交作业”：设置自定义定时提醒；“我的提醒/取消提醒”管理
-            17. 项目配置和河南师范大学问题会先检索本地知识库，再由模型回答
-            18. /clear：清除当前用户的对话记录和待补充意图
-            19. /help：查看本帮助
+            17. 发送“订阅午餐菜单”或“每天12点自动生成午餐菜单”：每天定时推送当日午餐菜单（默认12:00），“取消午餐菜单”退订
+            18. 项目配置和河南师范大学问题会先检索本地知识库，再由模型回答
+            19. /clear：清除当前用户的对话记录和待补充意图
+            20. /help：查看本帮助
             当前版本暂不处理文件和视频。
             """;
 
@@ -83,6 +95,13 @@ public class MessageProcessor {
     private final RagRetriever ragRetriever;
     private final ConversationMemoryStore memoryStore;
     private final MessageDeduplicator deduplicator;
+    /** 慢请求回执调度器与待取消任务表（按消息 id）。 */
+    private final ScheduledExecutorService ackScheduler = Executors.newScheduledThreadPool(2, runnable -> {
+        Thread thread = new Thread(runnable, "message-ack");
+        thread.setDaemon(true);
+        return thread;
+    });
+    private final Map<String, ScheduledFuture<?>> pendingAcks = new ConcurrentHashMap<>();
 
     public MessageProcessor(
             WechatGateway gateway,
@@ -114,10 +133,12 @@ public class MessageProcessor {
     }
 
     public void process(InboundMessage message) {
+        long startedAt = System.nanoTime();
         if (!deduplicator.firstSeen(message.messageId())) {
             LOGGER.debug("忽略重复消息：{}", message.messageId());
             return;
         }
+        scheduleAck(message);
         try {
             route(message);
         } catch (SpeechRecognitionException exception) {
@@ -134,7 +155,39 @@ public class MessageProcessor {
         } catch (RuntimeException exception) {
             LOGGER.error("处理微信消息时发生未预期错误", exception);
             safeSendText(message.userId(), "抱歉，处理消息时发生错误，请稍后再试。");
+        } finally {
+            cancelAck(message.messageId());
+            LOGGER.info("消息处理完成 userId={} 耗时={}ms",
+                    message.userId(), (System.nanoTime() - startedAt) / 1_000_000);
         }
+    }
+
+    /** 处理超过延迟仍未完成时先回执，避免用户长时间等待；快速消息在完成时取消回执。 */
+    private void scheduleAck(InboundMessage message) {
+        ScheduledFuture<?> ack = ackScheduler.schedule(() -> {
+            // 消息已完成（回执已被取消）时不再发送，避免"结果之后再补回执"的乱序
+            if (pendingAcks.remove(message.messageId()) == null) {
+                return;
+            }
+            try {
+                gateway.sendText(message.userId(), ACK_TEXT);
+            } catch (IOException exception) {
+                LOGGER.warn("发送处理回执失败：{}", exception.getMessage());
+            }
+        }, ACK_DELAY_MILLIS, TimeUnit.MILLISECONDS);
+        pendingAcks.put(message.messageId(), ack);
+    }
+
+    private void cancelAck(String messageId) {
+        ScheduledFuture<?> ack = pendingAcks.remove(messageId);
+        if (ack != null) {
+            ack.cancel(false);
+        }
+    }
+
+    @Override
+    public void destroy() {
+        ackScheduler.shutdownNow();
     }
 
     private void route(InboundMessage original) throws IOException {
@@ -172,6 +225,20 @@ public class MessageProcessor {
         if (intent.type() == IntentType.HELP) {
             sendReply(message, HELP_TEXT);
             return;
+        }
+        // 断点续跑：用户回复"继续"且存在上次中断的任务时，从断点继续，不整条重来
+        if (isResume(command)) {
+            Optional<ChatOutcome> resumed = tryResume(message);
+            if (resumed.isPresent()) {
+                ChatOutcome outcome = resumed.get();
+                sendOutcome(message, outcome);
+                memoryStore.recordExchange(
+                        message.userId(), command, outcome.text().isBlank() && !outcome.media().isEmpty()
+                                ? "[已从断点继续完成任务]"
+                                : outcome.text());
+                return;
+            }
+            // 没有断点则回退到普通流程，让模型正常接话
         }
 
         Optional<SkillRegistry.Match> skillMatch = skillRegistry.match(command);
@@ -469,6 +536,29 @@ public class MessageProcessor {
 
     private boolean isCancellation(String command) {
         return "取消".equals(command) || "算了".equals(command) || "不用了".equals(command);
+    }
+
+    /** 断点续跑指令，与 isCancellation 对称；仅精确匹配，避免误吞普通聊天。 */
+    private boolean isResume(String command) {
+        if (command == null) {
+            return false;
+        }
+        return switch (command.strip().toLowerCase(Locale.ROOT)) {
+            case "继续", "接着", "继续做", "接着做", "继续刚才", "继续上次",
+                    "继续刚才的任务", "继续任务", "接着刚才", "继续执行" -> true;
+            default -> false;
+        };
+    }
+
+    /** 尝试从上次中断的任务断点续跑；没有断点或续跑失败返回空，由调用方回退普通流程。 */
+    private Optional<ChatOutcome> tryResume(InboundMessage message) {
+        try {
+            return chatClient.resume(new ToolContext(
+                    message.userId(), message.text(), memoryStore.history(message.userId())));
+        } catch (RuntimeException exception) {
+            LOGGER.warn("断点续跑处理失败（{}）：{}", message.userId(), exception.getMessage());
+            return Optional.empty();
+        }
     }
 
     private void safeSendText(String userId, String text) {

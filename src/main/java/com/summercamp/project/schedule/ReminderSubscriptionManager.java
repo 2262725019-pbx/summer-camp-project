@@ -18,7 +18,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 /**
- * 定时推送的订阅表。一个用户一条记录，可同时订阅健康提醒与天气播报。
+ * 定时推送的订阅表。一个用户一条记录，可同时订阅健康提醒、天气播报与每日午餐菜单。
  * 变更后立即写入 JSON 文件，重启时自动加载恢复。
  */
 @Component
@@ -26,7 +26,7 @@ public class ReminderSubscriptionManager {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(ReminderSubscriptionManager.class);
 
-    /** 一条订阅：健康提醒（目标+热量+可选时间）与天气播报（城市+可选时间）。时间 null 表示用全局默认。 */
+    /** 一条订阅：健康提醒（目标+热量+可选时间）、天气播报（城市+可选时间）与午餐菜单（可选时间）。时间 null 表示用全局默认。 */
     public record Subscription(
             String userId,
             boolean healthReminder,
@@ -35,6 +35,8 @@ public class ReminderSubscriptionManager {
             String city,
             String healthReminderTime,
             String weatherDigestTime,
+            boolean lunchMenu,
+            String lunchMenuTime,
             long createdAtMillis) {
 
         public Subscription {
@@ -77,6 +79,8 @@ public class ReminderSubscriptionManager {
                 previous == null ? null : previous.city(),
                 time,
                 previous == null ? null : previous.weatherDigestTime(),
+                previous != null && previous.lunchMenu(),
+                previous == null ? null : previous.lunchMenuTime(),
                 previous == null ? System.currentTimeMillis() : previous.createdAtMillis());
         subscriptions.put(userId, updated);
         save();
@@ -101,6 +105,8 @@ public class ReminderSubscriptionManager {
                 city.strip(),
                 previous == null ? null : previous.healthReminderTime(),
                 time,
+                previous != null && previous.lunchMenu(),
+                previous == null ? null : previous.lunchMenuTime(),
                 previous == null ? System.currentTimeMillis() : previous.createdAtMillis());
         subscriptions.put(userId, updated);
         save();
@@ -117,6 +123,8 @@ public class ReminderSubscriptionManager {
                 previous == null ? null : previous.city(),
                 time,
                 previous == null ? null : previous.weatherDigestTime(),
+                previous != null && previous.lunchMenu(),
+                previous == null ? null : previous.lunchMenuTime(),
                 previous == null ? System.currentTimeMillis() : previous.createdAtMillis());
         subscriptions.put(userId, updated);
         save();
@@ -136,21 +144,24 @@ public class ReminderSubscriptionManager {
                 previous.city(),
                 previous.healthReminderTime(),
                 time,
+                previous.lunchMenu(),
+                previous.lunchMenuTime(),
                 previous.createdAtMillis()));
         save();
         return true;
     }
 
-    /** 退订健康提醒；若天气也未订阅则整条移除。 */
+    /** 退订健康提醒；若天气与午餐菜单均未订阅则整条移除。 */
     public boolean unsubscribeHealth(String userId) {
         Subscription current = subscriptions.get(userId);
         if (current == null || !current.healthReminder()) {
             return false;
         }
-        if (current.weatherSubscribed()) {
+        if (current.weatherSubscribed() || current.lunchMenu()) {
             subscriptions.put(userId, new Subscription(
                     userId, false, null, null, current.city(), null,
-                    current.weatherDigestTime(), current.createdAtMillis()));
+                    current.weatherDigestTime(), current.lunchMenu(), current.lunchMenuTime(),
+                    current.createdAtMillis()));
         } else {
             subscriptions.remove(userId);
         }
@@ -158,16 +169,17 @@ public class ReminderSubscriptionManager {
         return true;
     }
 
-    /** 退订天气播报；若健康提醒也未订阅则整条移除。 */
+    /** 退订天气播报；若健康提醒与午餐菜单均未订阅则整条移除。 */
     public boolean unsubscribeWeather(String userId) {
         Subscription current = subscriptions.get(userId);
         if (current == null || !current.weatherSubscribed()) {
             return false;
         }
-        if (current.healthReminder()) {
+        if (current.healthReminder() || current.lunchMenu()) {
             subscriptions.put(userId, new Subscription(
-                    userId, true, current.goalChinese(), current.targetCalories(), null,
-                    current.healthReminderTime(), null, current.createdAtMillis()));
+                    userId, current.healthReminder(), current.goalChinese(), current.targetCalories(), null,
+                    current.healthReminderTime(), null, current.lunchMenu(), current.lunchMenuTime(),
+                    current.createdAtMillis()));
         } else {
             subscriptions.remove(userId);
         }
@@ -187,11 +199,80 @@ public class ReminderSubscriptionManager {
         return subscriptions.values().stream().filter(Subscription::healthReminder).toList();
     }
 
+    /** 登记或更新每日午餐菜单订阅，用全局默认时间。 */
+    public void subscribeLunchMenu(String userId) {
+        subscribeLunchMenu(userId, null);
+    }
+
+    /** 登记或更新每日午餐菜单订阅，并指定推送时间（HH:mm，null 用全局默认 12:00）。 */
+    public void subscribeLunchMenu(String userId, String time) {
+        if (userId == null || userId.isBlank()) {
+            return;
+        }
+        Subscription previous = subscriptions.get(userId);
+        Subscription updated = new Subscription(
+                userId,
+                previous != null && previous.healthReminder(),
+                previous == null ? null : previous.goalChinese(),
+                previous == null ? null : previous.targetCalories(),
+                previous == null ? null : previous.city(),
+                previous == null ? null : previous.healthReminderTime(),
+                previous == null ? null : previous.weatherDigestTime(),
+                true,
+                time,
+                previous == null ? System.currentTimeMillis() : previous.createdAtMillis());
+        subscriptions.put(userId, updated);
+        save();
+    }
+
+    /** 只修改午餐菜单的推送时间；未订阅则返回 false。 */
+    public boolean updateLunchMenuTime(String userId, String time) {
+        Subscription previous = subscriptions.get(userId);
+        if (previous == null || !previous.lunchMenu()) {
+            return false;
+        }
+        subscriptions.put(userId, new Subscription(
+                userId,
+                previous.healthReminder(),
+                previous.goalChinese(),
+                previous.targetCalories(),
+                previous.city(),
+                previous.healthReminderTime(),
+                previous.weatherDigestTime(),
+                true,
+                time,
+                previous.createdAtMillis()));
+        save();
+        return true;
+    }
+
+    /** 退订午餐菜单；若健康提醒与天气均未订阅则整条移除。 */
+    public boolean unsubscribeLunchMenu(String userId) {
+        Subscription current = subscriptions.get(userId);
+        if (current == null || !current.lunchMenu()) {
+            return false;
+        }
+        if (current.healthReminder() || current.weatherSubscribed()) {
+            subscriptions.put(userId, new Subscription(
+                    userId, current.healthReminder(), current.goalChinese(), current.targetCalories(),
+                    current.city(), current.healthReminderTime(), current.weatherDigestTime(),
+                    false, null, current.createdAtMillis()));
+        } else {
+            subscriptions.remove(userId);
+        }
+        save();
+        return true;
+    }
+
+    public List<Subscription> allLunchMenuSubscribers() {
+        return subscriptions.values().stream().filter(Subscription::lunchMenu).toList();
+    }
+
     /** 人类可读的订阅概览，用于"查看订阅"回复。 */
     public String summary(String userId) {
         Optional<Subscription> found = find(userId);
         if (found.isEmpty()) {
-            return "你还没有订阅任何提醒。可发送“订阅天气 北京”或“订阅健康提醒”开启。";
+            return "你还没有订阅任何推送。可发送“订阅天气 北京”“订阅健康提醒”或“订阅午餐菜单”开启。";
         }
         Subscription subscription = found.get();
         List<String> parts = new ArrayList<>();
@@ -202,8 +283,11 @@ public class ReminderSubscriptionManager {
             parts.add(subscription.city() + " 天气播报（每天 "
                     + timeOrDefault(subscription.weatherDigestTime(), "07:30") + "）");
         }
+        if (subscription.lunchMenu()) {
+            parts.add("午餐菜单（每天 " + timeOrDefault(subscription.lunchMenuTime(), "12:00") + "）");
+        }
         return "当前订阅：" + String.join("、", parts)
-                + "。发送“退订提醒/退订天气”可取消，发送“健康提醒改到21:30”可改时间。";
+                + "。发送“退订提醒/退订天气/取消午餐菜单”可取消，发送“健康提醒改到21:30”或“午餐菜单改到12点”可改时间。";
     }
 
     private String timeOrDefault(String time, String fallback) {
@@ -241,6 +325,10 @@ public class ReminderSubscriptionManager {
                         node.hasNonNull("weatherDigestTime")
                                 ? node.path("weatherDigestTime").asText()
                                 : null,
+                        node.path("lunchMenu").asBoolean(false),
+                        node.hasNonNull("lunchMenuTime")
+                                ? node.path("lunchMenuTime").asText()
+                                : null,
                         node.path("createdAtMillis").asLong(System.currentTimeMillis()));
                 subscriptions.put(userId, subscription);
             }
@@ -274,6 +362,10 @@ public class ReminderSubscriptionManager {
                 }
                 if (subscription.weatherDigestTime() != null) {
                     node.put("weatherDigestTime", subscription.weatherDigestTime());
+                }
+                node.put("lunchMenu", subscription.lunchMenu());
+                if (subscription.lunchMenuTime() != null) {
+                    node.put("lunchMenuTime", subscription.lunchMenuTime());
                 }
                 node.put("createdAtMillis", subscription.createdAtMillis());
             }

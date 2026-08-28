@@ -49,7 +49,8 @@ public class JsonFormatSkill implements BotSkill {
             return SkillResult.waitingInput("请发送需要格式化的 JSON 内容。");
         }
         if (json.length() > MAX_JSON_CHARACTERS) {
-            return SkillResult.waitingInput("JSON 内容过长，请控制在 20,000 个字符以内后重新发送。");
+            // 直接结束，不进入待补充状态，避免后续消息被 JSON 校验劫持
+            return SkillResult.completed("JSON 内容过长，请控制在 20,000 个字符以内后重新发送。");
         }
         try {
             JsonNode value = objectMapper.reader()
@@ -57,7 +58,9 @@ public class JsonFormatSkill implements BotSkill {
                     .readTree(json);
             return SkillResult.completed(objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(value));
         } catch (JsonProcessingException exception) {
-            return SkillResult.waitingInput("JSON 格式不合法，请检查后重新发送；发送“取消”可以退出。");
+            // 直接结束，不进入待补充状态；用户可用"JSON格式化：{修正后的内容}"重试
+            return SkillResult.completed(
+                    "JSON 格式不合法，请检查后重新发送；示例：JSON格式化：{\"name\":\"夏令营\"}");
         }
     }
 
