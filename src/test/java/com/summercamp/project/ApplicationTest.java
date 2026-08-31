@@ -19,7 +19,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 
 @SpringBootTest(
         webEnvironment = SpringBootTest.WebEnvironment.NONE,
-        properties = "bot.enabled=false")
+        properties = {"bot.enabled=false", "agent.persistence.enabled=false"})
 class ApplicationTest {
 
     @Autowired

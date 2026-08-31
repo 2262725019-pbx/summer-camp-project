@@ -18,21 +18,27 @@ public class TaskScheduler {
     private static final Logger LOGGER = LoggerFactory.getLogger(TaskScheduler.class);
 
     public <T> T execute(AgentRun run, String stepId, Supplier<T> action) {
+        run.ensureActive();
         AgentStep step = run.plan().requireStep(stepId);
         if (!run.dependenciesSucceeded(step)) {
             throw new IllegalStateException("步骤依赖尚未完成：" + stepId);
         }
         Throwable lastError = null;
         for (int attempt = 1; attempt <= step.maxAttempts(); attempt++) {
+            run.ensureActive();
             run.start(stepId);
             long started = System.nanoTime();
             try {
                 T output = action.get();
+                run.ensureActive();
                 run.succeed(stepId, output);
                 LOGGER.info("Agent 步骤成功：runId={} step={} attempt={} elapsedMs={}",
                         run.id(), stepId, attempt, elapsedMillis(started));
                 return output;
+            } catch (AgentCancelledException exception) {
+                throw exception;
             } catch (RuntimeException exception) {
+                run.ensureActive();
                 lastError = exception;
                 run.fail(stepId, exception);
                 LOGGER.warn("Agent 步骤失败：runId={} step={} attempt={} error={}",

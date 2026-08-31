@@ -4,11 +4,14 @@ import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.mockito.ArgumentMatchers.anyString;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.summercamp.project.agent.HealthPlanAgent;
 import com.summercamp.project.agent.HealthAgentResult;
+import com.summercamp.project.agent.HealthReminderService;
 import com.summercamp.project.config.RagProperties;
 import com.summercamp.project.conversation.InMemoryConversationMemoryStore;
 import com.summercamp.project.intent.IntentClassificationClient;
@@ -55,6 +58,7 @@ class MessageProcessorTest {
     private InMemoryConversationMemoryStore memory;
     private MessageProcessor processor;
     private HealthPlanAgent healthPlanAgent;
+    private HealthReminderService reminderService;
 
     @BeforeEach
     void setUp() {
@@ -62,6 +66,8 @@ class MessageProcessorTest {
         model = new FakeModel();
         memory = new InMemoryConversationMemoryStore();
         healthPlanAgent = mock(HealthPlanAgent.class);
+        reminderService = mock(HealthReminderService.class);
+        when(reminderService.handleCommand(anyString(), anyString())).thenReturn(Optional.empty());
         ObjectMapper objectMapper = new ObjectMapper();
         SkillRegistry skillRegistry = new SkillRegistry(List.of(
                 new MuscleGainMealPlanSkill(new FoodCatalog(objectMapper)),
@@ -80,7 +86,8 @@ class MessageProcessorTest {
                 new KeywordRagRetriever(new RagProperties(true, 3, 2, 2_500), objectMapper),
                 memory,
                 new MessageDeduplicator(),
-                healthPlanAgent);
+                healthPlanAgent,
+                reminderService);
     }
 
     @Test
@@ -96,6 +103,50 @@ class MessageProcessorTest {
         assertTrue(model.chatRequests.isEmpty());
         assertEquals(List.of("健康计划已完成"), gateway.sentTexts);
         assertArrayEquals(new byte[] {1, 2, 3}, gateway.sentImages.getFirst());
+    }
+
+    @Test
+    void shouldResumeAnInterruptedHealthPlan() {
+        when(healthPlanAgent.resume("user-a", List.of())).thenReturn(
+                HealthAgentResult.completed("已从断点完成", List.of()));
+
+        processor.process(textMessage("resume-1", "user-a", "继续刚才的健康计划"));
+
+        assertEquals(List.of("已从断点完成"), gateway.sentTexts);
+        assertTrue(model.chatRequests.isEmpty());
+    }
+
+    @Test
+    void shouldShowAgentProgressWithoutCallingTheModel() {
+        when(healthPlanAgent.progress("user-a")).thenReturn("健康规划任务进度：50%");
+
+        processor.process(textMessage("progress-1", "user-a", "查看任务进度"));
+
+        assertEquals(List.of("健康规划任务进度：50%"), gateway.sentTexts);
+        assertTrue(model.chatRequests.isEmpty());
+        verify(healthPlanAgent).progress("user-a");
+    }
+
+    @Test
+    void shouldCancelAgentAndItsReminderWithoutCallingTheModel() {
+        when(healthPlanAgent.cancel("user-a")).thenReturn(true);
+
+        processor.process(textMessage("cancel-1", "user-a", "取消健康计划"));
+
+        assertTrue(gateway.sentTexts.getFirst().contains("已取消健康规划任务"));
+        assertTrue(model.chatRequests.isEmpty());
+        verify(healthPlanAgent).cancel("user-a");
+        verify(reminderService).clear("user-a");
+    }
+
+    @Test
+    void shouldOnlyClassifyPlainTextProgressAndCancellationAsControlMessages() {
+        assertTrue(processor.isAgentControlMessage(textMessage(
+                "control-progress", "user-a", "查看任务进度")));
+        assertTrue(processor.isAgentControlMessage(textMessage(
+                "control-cancel", "user-a", "取消健康计划")));
+        assertTrue(!processor.isAgentControlMessage(textMessage(
+                "ordinary", "user-a", "帮我制定健康计划")));
     }
 
     @Test
@@ -310,7 +361,7 @@ class MessageProcessorTest {
 
         assertTrue(memory.history("user-a").isEmpty());
         assertEquals(2, memory.history("user-b").size());
-        assertEquals("已清除你的对话上下文、待处理请求和 Agent 运行状态。", gateway.sentTexts.getLast());
+        assertEquals("已清除你的对话上下文、待处理请求、健康提醒和 Agent 运行状态。", gateway.sentTexts.getLast());
     }
 
     @Test

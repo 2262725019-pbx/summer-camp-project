@@ -39,6 +39,10 @@ public class ResultPageController {
                 .contentType(HTML_UTF8)
                 .cacheControl(CacheControl.noStore())
                 .header("X-Content-Type-Options", "nosniff")
+                .header("X-Frame-Options", "DENY")
+                .header("Referrer-Policy", "no-referrer")
+                .header("Content-Security-Policy",
+                        "default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'")
                 .body(body);
     }
 

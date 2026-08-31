@@ -23,9 +23,19 @@ public record HealthAgentResult(Status status, String reply, List<Media> media) 
         return new HealthAgentResult(Status.COMPLETED, reply, media);
     }
 
+    public static HealthAgentResult interrupted(String reply) {
+        return new HealthAgentResult(Status.INTERRUPTED, reply, List.of());
+    }
+
+    public static HealthAgentResult cancelled() {
+        return new HealthAgentResult(Status.CANCELLED, "", List.of());
+    }
+
     public enum Status {
         WAITING_INPUT,
         BLOCKED,
+        INTERRUPTED,
+        CANCELLED,
         COMPLETED
     }
 

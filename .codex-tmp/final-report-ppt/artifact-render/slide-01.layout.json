@@ -1,0 +1,550 @@
+{
+  "schema": "openai.presentation.layout/v4",
+  "unit": "px",
+  "slide": {
+    "aid": "sl/xgu4u5",
+    "id": "xgu4u5",
+    "slide": 1,
+    "layoutId": "00ea48dd-0a15-4f16-8c10-e564d7ccb37b",
+    "layoutName": "Title Slide",
+    "layoutType": "title",
+    "masterLayoutId": "ce7f22a1-eb64-4aa4-9994-52fa4e700100",
+    "masterLayoutName": "Master",
+    "backgroundColor": "#FFFFFF",
+    "frame": {
+      "left": 0,
+      "top": 0,
+      "width": 1280,
+      "height": 720
+    }
+  },
+  "theme": {
+    "colorSchemeName": "ChatGPT",
+    "colors": {
+      "accent1": "#156082",
+      "accent2": "#E97132",
+      "accent3": "#196B24",
+      "accent4": "#0F9ED5",
+      "accent5": "#A02B93",
+      "accent6": "#4EA72E",
+      "bg1": "#FFFFFF",
+      "bg2": "#000000",
+      "tx1": "#1F1F1F",
+      "tx2": "#FFFFFF",
+      "dk1": "#000000",
+      "lt1": "#FFFFFF",
+      "dk2": "#0E2841",
+      "lt2": "#E8E8E8",
+      "hlink": "#467886",
+      "folHlink": "#96607D"
+    },
+    "typefaces": [
+      "+mn-lt"
+    ]
+  },
+  "inheritedLayers": [
+    {
+      "scope": "layout",
+      "id": "00ea48dd-0a15-4f16-8c10-e564d7ccb37b",
+      "name": "Title Slide",
+      "type": "title",
+      "parentLayoutId": "ce7f22a1-eb64-4aa4-9994-52fa4e700100",
+      "elements": []
+    },
+    {
+      "scope": "master",
+      "id": "ce7f22a1-eb64-4aa4-9994-52fa4e700100",
+      "name": "Master",
+      "type": "master",
+      "elements": []
+    }
+  ],
+  "elements": [
+    {
+      "order": 1,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/wr2t0nil",
+      "id": "1",
+      "bbox": [
+        56,
+        44,
+        500,
+        30
+      ],
+      "geometry": "rect",
+      "text": "夏令营项目最终成果汇报",
+      "textPreview": "夏令营项目最终成果汇报",
+      "resolvedFontSize": 16,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 16,
+        "typeface": "+mn-lt",
+        "color": "#3D8DFF",
+        "bold": true,
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 1,
+        "insets": {
+          "top": 4.8,
+          "right": 9.6,
+          "bottom": 4.8,
+          "left": 9.6
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "夏令营项目最终成果汇报"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "夏令营项目最终成果汇报",
+          "resolvedTextStyle": {
+            "fontSize": 16,
+            "color": "#3D8DFF",
+            "bold": true,
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "夏令营项目最终成果汇报",
+              "fontSize": 16,
+              "color": "#3D8DFF",
+              "bold": true,
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 2,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/bqtsri10",
+      "id": "2",
+      "bbox": [
+        56,
+        136,
+        520,
+        150
+      ],
+      "geometry": "rect",
+      "text": "微信多模态\nAI Agent",
+      "textPreview": "微信多模态 | AI Agent",
+      "resolvedFontSize": 58,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 58,
+        "typeface": "+mn-lt",
+        "color": "#101114",
+        "bold": true,
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 1,
+        "insets": {
+          "top": 4.8,
+          "right": 9.6,
+          "bottom": 4.8,
+          "left": 9.6
+        }
+      },
+      "textLayout": {
+        "lineCount": 2,
+        "lines": [
+          {
+            "index": 1,
+            "text": "微信多模态"
+          },
+          {
+            "index": 2,
+            "text": "AI Agent"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "微信多模态",
+          "resolvedTextStyle": {
+            "fontSize": 58,
+            "color": "#101114",
+            "bold": true,
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "微信多模态",
+              "fontSize": 58,
+              "color": "#101114",
+              "bold": true,
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        },
+        {
+          "index": 2,
+          "text": "AI Agent",
+          "resolvedTextStyle": {
+            "fontSize": 58,
+            "color": "#101114",
+            "bold": true,
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "AI Agent",
+              "fontSize": 58,
+              "color": "#101114",
+              "bold": true,
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 3,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/a5kbyd0f",
+      "id": "3",
+      "bbox": [
+        56,
+        315,
+        520,
+        48
+      ],
+      "geometry": "rect",
+      "text": "从消息收发到自主规划的完整闭环",
+      "textPreview": "从消息收发到自主规划的完整闭环",
+      "resolvedFontSize": 28,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 28,
+        "typeface": "+mn-lt",
+        "color": "#14253D",
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 1,
+        "insets": {
+          "top": 4.8,
+          "right": 9.6,
+          "bottom": 4.8,
+          "left": 9.6
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "从消息收发到自主规划的完整闭环"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "从消息收发到自主规划的完整闭环",
+          "resolvedTextStyle": {
+            "fontSize": 28,
+            "color": "#14253D",
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "从消息收发到自主规划的完整闭环",
+              "fontSize": 28,
+              "color": "#14253D",
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 4,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/94rap8ju",
+      "id": "4",
+      "bbox": [
+        56,
+        400,
+        240,
+        5
+      ],
+      "geometry": "rect",
+      "fillColor": "#3D8DFF",
+      "lineWidth": 0
+    },
+    {
+      "order": 5,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/o3itwni9",
+      "id": "5",
+      "bbox": [
+        56,
+        430,
+        530,
+        36
+      ],
+      "geometry": "rect",
+      "text": "Java 21 · Spring Boot · iLink · 智谱 · 高德 · SQLite",
+      "textPreview": "Java 21 · Spring Boot · iLink · 智谱 · 高德 · SQLite",
+      "resolvedFontSize": 18,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 18,
+        "typeface": "+mn-lt",
+        "color": "#60656F",
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 1,
+        "insets": {
+          "top": 4.8,
+          "right": 9.6,
+          "bottom": 4.8,
+          "left": 9.6
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Java 21 · Spring Boot · iLink · 智谱 · 高德 · SQLite"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Java 21 · Spring Boot · iLink · 智谱 · 高德 · SQLite",
+          "resolvedTextStyle": {
+            "fontSize": 18,
+            "color": "#60656F",
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "Java 21 · Spring Boot · iLink · 智谱 · 高德 · SQLite",
+              "fontSize": 18,
+              "color": "#60656F",
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 6,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/n29sni1o",
+      "id": "6",
+      "bbox": [
+        56,
+        594,
+        530,
+        32
+      ],
+      "geometry": "rect",
+      "text": "项目组：__________    汇报人：__________",
+      "textPreview": "项目组：__________    汇报人：__________",
+      "resolvedFontSize": 18,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 18,
+        "typeface": "+mn-lt",
+        "color": "#60656F",
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 1,
+        "insets": {
+          "top": 4.8,
+          "right": 9.6,
+          "bottom": 4.8,
+          "left": 9.6
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "项目组：__________    汇报人：__________"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "项目组：__________    汇报人：__________",
+          "resolvedTextStyle": {
+            "fontSize": 18,
+            "color": "#60656F",
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "项目组：__________    汇报人：__________",
+              "fontSize": 18,
+              "color": "#60656F",
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 7,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/m10bud0j",
+      "id": "7",
+      "bbox": [
+        660,
+        44,
+        564,
+        582
+      ],
+      "geometry": "roundRect",
+      "fillColor": "#EAF5FB",
+      "lineColor": "#B8BCC4",
+      "lineWidth": 1
+    },
+    {
+      "order": 8,
+      "kind": "image",
+      "scope": "slide",
+      "aid": "im/sv21gj6h",
+      "id": "8",
+      "bbox": [
+        660,
+        44,
+        564,
+        582
+      ],
+      "geometry": "roundRect",
+      "alt": "多模态移动 AI Agent 主视觉",
+      "contentType": "image/png",
+      "imageFit": "cover",
+      "imageMask": {
+        "geometry": "roundRect",
+        "adjustmentList": [
+          {
+            "name": "adj",
+            "formula": "val 2128"
+          }
+        ]
+      },
+      "asset": {
+        "assetId": "dfbfa0d5-9fa2-4ce0-9072-39e717e30710",
+        "contentType": "image/png",
+        "byteLength": 1672443
+      }
+    },
+    {
+      "order": 9,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/8zmts7it",
+      "id": "9",
+      "bbox": [
+        1180,
+        666,
+        44,
+        22
+      ],
+      "geometry": "rect",
+      "text": "01",
+      "textPreview": "01",
+      "resolvedFontSize": 10.33,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 14,
+        "typeface": "+mn-lt",
+        "color": "#60656F",
+        "alignment": "right",
+        "verticalAlignment": "top",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 0.74,
+        "insets": {
+          "top": 4.8,
+          "right": 9.6,
+          "bottom": 4.8,
+          "left": 9.6
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "01"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "01",
+          "resolvedTextStyle": {
+            "fontSize": 14,
+            "color": "#60656F",
+            "alignment": "right"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "01",
+              "fontSize": 14,
+              "color": "#60656F",
+              "alignment": "right"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    }
+  ],
+  "composeRuns": []
+}

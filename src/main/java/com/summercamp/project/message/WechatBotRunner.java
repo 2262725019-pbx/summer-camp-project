@@ -49,6 +49,11 @@ public class WechatBotRunner implements ApplicationRunner, DisposableBean {
                 return thread;
             },
             new ThreadPoolExecutor.CallerRunsPolicy());
+    private final ExecutorService controlExecutor = Executors.newFixedThreadPool(2, runnable -> {
+        Thread thread = new Thread(runnable, "wechat-agent-control");
+        thread.setDaemon(false);
+        return thread;
+    });
 
     public WechatBotRunner(
             WechatGateway gateway,
@@ -79,7 +84,10 @@ public class WechatBotRunner implements ApplicationRunner, DisposableBean {
                 }
                 List<InboundMessage> messages = gateway.poll();
                 for (InboundMessage message : messages) {
-                    messageExecutor.execute(() -> processor.process(message));
+                    ExecutorService executor = processor.isAgentControlMessage(message)
+                            ? controlExecutor
+                            : messageExecutor;
+                    executor.execute(() -> processor.process(message));
                 }
             } catch (WechatSessionExpiredException exception) {
                 LOGGER.warn("微信登录已失效，将生成新的二维码等待重新登录");
@@ -112,6 +120,7 @@ public class WechatBotRunner implements ApplicationRunner, DisposableBean {
         running.set(false);
         pollingExecutor.shutdownNow();
         messageExecutor.shutdownNow();
+        controlExecutor.shutdownNow();
         gateway.close();
     }
 }

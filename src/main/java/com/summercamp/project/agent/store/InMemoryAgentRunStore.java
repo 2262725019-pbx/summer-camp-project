@@ -4,9 +4,11 @@ import com.summercamp.project.agent.model.AgentRun;
 import java.time.Clock;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
 @Component
+@ConditionalOnProperty(name = "agent.persistence.enabled", havingValue = "false")
 public class InMemoryAgentRunStore implements AgentRunStore {
 
     private final ConcurrentHashMap<String, AgentRun> runs = new ConcurrentHashMap<>();

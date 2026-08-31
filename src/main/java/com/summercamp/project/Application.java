@@ -6,12 +6,14 @@ import org.springframework.boot.CommandLineRunner;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.context.properties.ConfigurationPropertiesScan;
+import org.springframework.scheduling.annotation.EnableScheduling;
 
 /**
  * Spring Boot 项目入口。
  */
 @SpringBootApplication
 @ConfigurationPropertiesScan
+@EnableScheduling
 public class Application implements CommandLineRunner {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(Application.class);

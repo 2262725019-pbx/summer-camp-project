@@ -1,0 +1,1071 @@
+{
+  "schema": "openai.presentation.layout/v4",
+  "unit": "px",
+  "slide": {
+    "aid": "sl/j63mkh",
+    "id": "j63mkh",
+    "slide": 3,
+    "layoutId": "00ea48dd-0a15-4f16-8c10-e564d7ccb37b",
+    "layoutName": "Title Slide",
+    "layoutType": "title",
+    "masterLayoutId": "ce7f22a1-eb64-4aa4-9994-52fa4e700100",
+    "masterLayoutName": "Master",
+    "backgroundColor": "#FFFFFF",
+    "frame": {
+      "left": 0,
+      "top": 0,
+      "width": 1280,
+      "height": 720
+    }
+  },
+  "theme": {
+    "colorSchemeName": "ChatGPT",
+    "colors": {
+      "accent1": "#156082",
+      "accent2": "#E97132",
+      "accent3": "#196B24",
+      "accent4": "#0F9ED5",
+      "accent5": "#A02B93",
+      "accent6": "#4EA72E",
+      "bg1": "#FFFFFF",
+      "bg2": "#000000",
+      "tx1": "#1F1F1F",
+      "tx2": "#FFFFFF",
+      "dk1": "#000000",
+      "lt1": "#FFFFFF",
+      "dk2": "#0E2841",
+      "lt2": "#E8E8E8",
+      "hlink": "#467886",
+      "folHlink": "#96607D"
+    },
+    "typefaces": [
+      "+mn-lt"
+    ]
+  },
+  "inheritedLayers": [
+    {
+      "scope": "layout",
+      "id": "00ea48dd-0a15-4f16-8c10-e564d7ccb37b",
+      "name": "Title Slide",
+      "type": "title",
+      "parentLayoutId": "ce7f22a1-eb64-4aa4-9994-52fa4e700100",
+      "elements": []
+    },
+    {
+      "scope": "master",
+      "id": "ce7f22a1-eb64-4aa4-9994-52fa4e700100",
+      "name": "Master",
+      "type": "master",
+      "elements": []
+    }
+  ],
+  "elements": [
+    {
+      "order": 1,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/3at4v6d8",
+      "id": "1",
+      "bbox": [
+        56,
+        30,
+        360,
+        26
+      ],
+      "geometry": "rect",
+      "text": "SUMMER CAMP PROJECT",
+      "textPreview": "SUMMER CAMP PROJECT",
+      "resolvedFontSize": 13.67,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 14,
+        "typeface": "+mn-lt",
+        "color": "#3D8DFF",
+        "bold": true,
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 0.98,
+        "insets": {
+          "top": 4.8,
+          "right": 9.6,
+          "bottom": 4.8,
+          "left": 9.6
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "SUMMER CAMP PROJECT"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "SUMMER CAMP PROJECT",
+          "resolvedTextStyle": {
+            "fontSize": 14,
+            "color": "#3D8DFF",
+            "bold": true,
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "SUMMER CAMP PROJECT",
+              "fontSize": 14,
+              "color": "#3D8DFF",
+              "bold": true,
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 2,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/4b2lobut",
+      "id": "2",
+      "bbox": [
+        56,
+        68,
+        1120,
+        66
+      ],
+      "geometry": "rect",
+      "text": "两周迭代让项目完成三次能力跃迁",
+      "textPreview": "两周迭代让项目完成三次能力跃迁",
+      "resolvedFontSize": 40,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 40,
+        "typeface": "+mn-lt",
+        "color": "#101114",
+        "bold": true,
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 1,
+        "insets": {
+          "top": 4.8,
+          "right": 9.6,
+          "bottom": 4.8,
+          "left": 9.6
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "两周迭代让项目完成三次能力跃迁"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "两周迭代让项目完成三次能力跃迁",
+          "resolvedTextStyle": {
+            "fontSize": 40,
+            "color": "#101114",
+            "bold": true,
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "两周迭代让项目完成三次能力跃迁",
+              "fontSize": 40,
+              "color": "#101114",
+              "bold": true,
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 3,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/5cbmxgve",
+      "id": "3",
+      "bbox": [
+        1180,
+        666,
+        44,
+        22
+      ],
+      "geometry": "rect",
+      "text": "03",
+      "textPreview": "03",
+      "resolvedFontSize": 10.33,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 14,
+        "typeface": "+mn-lt",
+        "color": "#60656F",
+        "alignment": "right",
+        "verticalAlignment": "top",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 0.74,
+        "insets": {
+          "top": 4.8,
+          "right": 9.6,
+          "bottom": 4.8,
+          "left": 9.6
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "03"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "03",
+          "resolvedTextStyle": {
+            "fontSize": 14,
+            "color": "#60656F",
+            "alignment": "right"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "03",
+              "fontSize": 14,
+              "color": "#60656F",
+              "alignment": "right"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 4,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/qdknqlcz",
+      "id": "4",
+      "bbox": [
+        72,
+        344,
+        1136,
+        2
+      ],
+      "geometry": "rect",
+      "fillColor": "#101114",
+      "lineWidth": 0
+    },
+    {
+      "order": 5,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/red4zqd4",
+      "id": "5",
+      "bbox": [
+        72,
+        337,
+        16,
+        16
+      ],
+      "geometry": "ellipse",
+      "fillColor": "#6DCBF4",
+      "lineWidth": 0
+    },
+    {
+      "order": 6,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/sfm5sbup",
+      "id": "6",
+      "bbox": [
+        72,
+        278,
+        150,
+        30
+      ],
+      "geometry": "rect",
+      "text": "第一阶段",
+      "textPreview": "第一阶段",
+      "resolvedFontSize": 17,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 17,
+        "typeface": "+mn-lt",
+        "color": "#6DCBF4",
+        "bold": true,
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 1,
+        "insets": {
+          "top": 4.8,
+          "right": 9.6,
+          "bottom": 4.8,
+          "left": 9.6
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "第一阶段"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "第一阶段",
+          "resolvedTextStyle": {
+            "fontSize": 17,
+            "color": "#6DCBF4",
+            "bold": true,
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "第一阶段",
+              "fontSize": 17,
+              "color": "#6DCBF4",
+              "bold": true,
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 7,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/dgvm1gba",
+      "id": "7",
+      "bbox": [
+        72,
+        390,
+        320,
+        42
+      ],
+      "geometry": "rect",
+      "text": "Bot 能用",
+      "textPreview": "Bot 能用",
+      "resolvedFontSize": 27,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 27,
+        "typeface": "+mn-lt",
+        "color": "#101114",
+        "bold": true,
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 1,
+        "insets": {
+          "top": 4.8,
+          "right": 9.6,
+          "bottom": 4.8,
+          "left": 9.6
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Bot 能用"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Bot 能用",
+          "resolvedTextStyle": {
+            "fontSize": 27,
+            "color": "#101114",
+            "bold": true,
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "Bot 能用",
+              "fontSize": 27,
+              "color": "#101114",
+              "bold": true,
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 8,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/eh4nulcv",
+      "id": "8",
+      "bbox": [
+        72,
+        447,
+        320,
+        126
+      ],
+      "geometry": "rect",
+      "text": "Spring Boot 项目骨架\n微信二维码登录与长轮询\nSLF4J / Logback / CI",
+      "textPreview": "Spring Boot 项目骨架 | 微信二维码登录与长轮询 | SLF4J / Logback / CI",
+      "resolvedFontSize": 19,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 19,
+        "typeface": "+mn-lt",
+        "color": "#60656F",
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 1,
+        "insets": {
+          "top": 4.8,
+          "right": 9.6,
+          "bottom": 4.8,
+          "left": 9.6
+        }
+      },
+      "textLayout": {
+        "lineCount": 3,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Spring Boot 项目骨架"
+          },
+          {
+            "index": 2,
+            "text": "微信二维码登录与长轮询"
+          },
+          {
+            "index": 3,
+            "text": "SLF4J / Logback / CI"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Spring Boot 项目骨架",
+          "resolvedTextStyle": {
+            "fontSize": 19,
+            "color": "#60656F",
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "Spring Boot 项目骨架",
+              "fontSize": 19,
+              "color": "#60656F",
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        },
+        {
+          "index": 2,
+          "text": "微信二维码登录与长轮询",
+          "resolvedTextStyle": {
+            "fontSize": 19,
+            "color": "#60656F",
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "微信二维码登录与长轮询",
+              "fontSize": 19,
+              "color": "#60656F",
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        },
+        {
+          "index": 3,
+          "text": "SLF4J / Logback / CI",
+          "resolvedTextStyle": {
+            "fontSize": 19,
+            "color": "#60656F",
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "SLF4J / Logback / CI",
+              "fontSize": 19,
+              "color": "#60656F",
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 9,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/fid43qtg",
+      "id": "9",
+      "bbox": [
+        450,
+        337,
+        16,
+        16
+      ],
+      "geometry": "ellipse",
+      "fillColor": "#3D8DFF",
+      "lineWidth": 0
+    },
+    {
+      "order": 10,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/fqxs7qpc",
+      "id": "10",
+      "bbox": [
+        450,
+        278,
+        150,
+        30
+      ],
+      "geometry": "rect",
+      "text": "第二阶段",
+      "textPreview": "第二阶段",
+      "resolvedFontSize": 17,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 17,
+        "typeface": "+mn-lt",
+        "color": "#3D8DFF",
+        "bold": true,
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 1,
+        "insets": {
+          "top": 4.8,
+          "right": 9.6,
+          "bottom": 4.8,
+          "left": 9.6
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "第二阶段"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "第二阶段",
+          "resolvedTextStyle": {
+            "fontSize": 17,
+            "color": "#3D8DFF",
+            "bold": true,
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "第二阶段",
+              "fontSize": 17,
+              "color": "#3D8DFF",
+              "bold": true,
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 11,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/eporylor",
+      "id": "11",
+      "bbox": [
+        450,
+        390,
+        320,
+        42
+      ],
+      "geometry": "rect",
+      "text": "Bot 能感知与行动",
+      "textPreview": "Bot 能感知与行动",
+      "resolvedFontSize": 27,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 27,
+        "typeface": "+mn-lt",
+        "color": "#101114",
+        "bold": true,
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 1,
+        "insets": {
+          "top": 4.8,
+          "right": 9.6,
+          "bottom": 4.8,
+          "left": 9.6
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Bot 能感知与行动"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Bot 能感知与行动",
+          "resolvedTextStyle": {
+            "fontSize": 27,
+            "color": "#101114",
+            "bold": true,
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "Bot 能感知与行动",
+              "fontSize": 27,
+              "color": "#101114",
+              "bold": true,
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 12,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/1sza907i",
+      "id": "12",
+      "bbox": [
+        450,
+        447,
+        320,
+        126
+      ],
+      "geometry": "rect",
+      "text": "文字、图片、语音\n天气与 Function Calling\nTool、Skill、RAG",
+      "textPreview": "文字、图片、语音 | 天气与 Function Calling | Tool、Skill、RAG",
+      "resolvedFontSize": 19,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 19,
+        "typeface": "+mn-lt",
+        "color": "#60656F",
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 1,
+        "insets": {
+          "top": 4.8,
+          "right": 9.6,
+          "bottom": 4.8,
+          "left": 9.6
+        }
+      },
+      "textLayout": {
+        "lineCount": 3,
+        "lines": [
+          {
+            "index": 1,
+            "text": "文字、图片、语音"
+          },
+          {
+            "index": 2,
+            "text": "天气与 Function Calling"
+          },
+          {
+            "index": 3,
+            "text": "Tool、Skill、RAG"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "文字、图片、语音",
+          "resolvedTextStyle": {
+            "fontSize": 19,
+            "color": "#60656F",
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "文字、图片、语音",
+              "fontSize": 19,
+              "color": "#60656F",
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        },
+        {
+          "index": 2,
+          "text": "天气与 Function Calling",
+          "resolvedTextStyle": {
+            "fontSize": 19,
+            "color": "#60656F",
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "天气与 Function Calling",
+              "fontSize": 19,
+              "color": "#60656F",
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        },
+        {
+          "index": 3,
+          "text": "Tool、Skill、RAG",
+          "resolvedTextStyle": {
+            "fontSize": 19,
+            "color": "#60656F",
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "Tool、Skill、RAG",
+              "fontSize": 19,
+              "color": "#60656F",
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 13,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/0rq90v6x",
+      "id": "13",
+      "bbox": [
+        828,
+        337,
+        16,
+        16
+      ],
+      "geometry": "ellipse",
+      "fillColor": "#25C78A",
+      "lineWidth": 0
+    },
+    {
+      "order": 14,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/rmx83qpg",
+      "id": "14",
+      "bbox": [
+        828,
+        278,
+        150,
+        30
+      ],
+      "geometry": "rect",
+      "text": "第三阶段",
+      "textPreview": "第三阶段",
+      "resolvedFontSize": 17,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 17,
+        "typeface": "+mn-lt",
+        "color": "#25C78A",
+        "bold": true,
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 1,
+        "insets": {
+          "top": 4.8,
+          "right": 9.6,
+          "bottom": 4.8,
+          "left": 9.6
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "第三阶段"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "第三阶段",
+          "resolvedTextStyle": {
+            "fontSize": 17,
+            "color": "#25C78A",
+            "bold": true,
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "第三阶段",
+              "fontSize": 17,
+              "color": "#25C78A",
+              "bold": true,
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 15,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/qlorulov",
+      "id": "15",
+      "bbox": [
+        828,
+        390,
+        320,
+        42
+      ],
+      "geometry": "rect",
+      "text": "Bot 能自主完成任务",
+      "textPreview": "Bot 能自主完成任务",
+      "resolvedFontSize": 27,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 27,
+        "typeface": "+mn-lt",
+        "color": "#101114",
+        "bold": true,
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 1,
+        "insets": {
+          "top": 4.8,
+          "right": 9.6,
+          "bottom": 4.8,
+          "left": 9.6
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Bot 能自主完成任务"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Bot 能自主完成任务",
+          "resolvedTextStyle": {
+            "fontSize": 27,
+            "color": "#101114",
+            "bold": true,
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "Bot 能自主完成任务",
+              "fontSize": 27,
+              "color": "#101114",
+              "bold": true,
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 16,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/dofq507m",
+      "id": "16",
+      "bbox": [
+        828,
+        447,
+        320,
+        126
+      ],
+      "geometry": "rect",
+      "text": "12 步健康规划 Agent\n并行、缓存、Prompt 压缩\nSQLite 续跑与每日提醒",
+      "textPreview": "12 步健康规划 Agent | 并行、缓存、Prompt 压缩 | SQLite 续跑与每日提醒",
+      "resolvedFontSize": 19,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 19,
+        "typeface": "+mn-lt",
+        "color": "#60656F",
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 1,
+        "insets": {
+          "top": 4.8,
+          "right": 9.6,
+          "bottom": 4.8,
+          "left": 9.6
+        }
+      },
+      "textLayout": {
+        "lineCount": 3,
+        "lines": [
+          {
+            "index": 1,
+            "text": "12 步健康规划 Agent"
+          },
+          {
+            "index": 2,
+            "text": "并行、缓存、Prompt 压缩"
+          },
+          {
+            "index": 3,
+            "text": "SQLite 续跑与每日提醒"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "12 步健康规划 Agent",
+          "resolvedTextStyle": {
+            "fontSize": 19,
+            "color": "#60656F",
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "12 步健康规划 Agent",
+              "fontSize": 19,
+              "color": "#60656F",
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        },
+        {
+          "index": 2,
+          "text": "并行、缓存、Prompt 压缩",
+          "resolvedTextStyle": {
+            "fontSize": 19,
+            "color": "#60656F",
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "并行、缓存、Prompt 压缩",
+              "fontSize": 19,
+              "color": "#60656F",
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        },
+        {
+          "index": 3,
+          "text": "SQLite 续跑与每日提醒",
+          "resolvedTextStyle": {
+            "fontSize": 19,
+            "color": "#60656F",
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "SQLite 续跑与每日提醒",
+              "fontSize": 19,
+              "color": "#60656F",
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    }
+  ],
+  "composeRuns": []
+}

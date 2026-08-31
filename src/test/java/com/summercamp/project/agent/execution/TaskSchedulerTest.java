@@ -1,6 +1,7 @@
 package com.summercamp.project.agent.execution;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.summercamp.project.agent.model.AgentRun;
 import com.summercamp.project.agent.model.HealthGoal;
@@ -53,6 +54,17 @@ class TaskSchedulerTest {
 
         assertThat(results.values()).allMatch(TaskScheduler.StepResult::succeeded);
         assertThat(overlapped).isTrue();
+    }
+
+    @Test
+    void stopsBeforeExecutingAnotherStepAfterCancellation() {
+        AgentRun run = run();
+        completeInitialSteps(run);
+        run.cancel();
+
+        assertThatThrownBy(() -> scheduler.execute(
+                run, "retrieve-health-knowledge", () -> "should not run"))
+                .isInstanceOf(AgentCancelledException.class);
     }
 
     private String slowOperation(AtomicInteger running, AtomicBoolean overlapped) {

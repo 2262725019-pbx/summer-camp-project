@@ -25,7 +25,26 @@ rag.max-context-chars=2500
 # 大学生智能健康生活规划 Agent。
 agent.health.enabled=true
 agent.health.pending-ttl=30m
-agent.health.generate-cover=true
+agent.health.generate-cover=false
+
+# Agent 状态保存在本地 SQLite，程序重启后仍可续跑任务和恢复提醒。
+agent.persistence.enabled=true
+agent.persistence.database-path=runtime/agent-state.db
+
+# 性能优化；封面不是主流程必需，可设为 false 以减少等待和图片调用。
+agent.optimization.cache-enabled=true
+agent.optimization.weather-cache-ttl=10m
+agent.optimization.rag-cache-ttl=30m
+agent.optimization.cache-max-entries=200
+agent.optimization.max-rag-prompt-chars=1200
+agent.optimization.max-history-messages=6
+agent.optimization.max-history-chars=1600
+
+# 用户仍需在微信发送“开启每日健康提醒 07:30”才会真正订阅。
+agent.health.reminder.enabled=true
+agent.health.reminder.scan-interval=30s
+agent.health.reminder.plan-ttl=14d
+agent.health.reminder.zone-id=Asia/Shanghai
 
 ai.zhipu.base-url=https://open.bigmodel.cn/api/paas/v4
 ai.zhipu.chat-api-path=/chat/completions

@@ -1,0 +1,268 @@
+{"kind":"deck","id":"pr/hpgw5d","name":"Deck"}
+{"kind":"layout","layoutId":"ce7f22a1-eb64-4aa4-9994-52fa4e700100","name":"Master","type":"master"}
+{"kind":"layout","layoutId":"00ea48dd-0a15-4f16-8c10-e564d7ccb37b","name":"Title Slide","type":"title"}
+{"kind":"slide","id":"sl/xgu4u5","slide":1,"title":"夏令营项目最终成果汇报","textShapes":6}
+{"kind":"textbox","id":"sh/wr2t0nil","slide":1,"text":"夏令营项目最终成果汇报","textPreview":"夏令营项目最终成果汇报","textChars":11,"textLines":1,"bbox":[56,44,500,30]}
+{"kind":"textbox","id":"sh/bqtsri10","slide":1,"text":"微信多模态\nAI Agent","textPreview":"微信多模态 | AI Agent","textChars":14,"textLines":2,"bbox":[56,136,520,150]}
+{"kind":"textbox","id":"sh/a5kbyd0f","slide":1,"text":"从消息收发到自主规划的完整闭环","textPreview":"从消息收发到自主规划的完整闭环","textChars":15,"textLines":1,"bbox":[56,315,520,48]}
+{"kind":"shape","id":"sh/94rap8ju","slide":1,"bbox":[56,400,240,5]}
+{"kind":"textbox","id":"sh/o3itwni9","slide":1,"text":"Java 21 · Spring Boot · iLink · 智谱 · 高德 · SQLite","textPreview":"Java 21 · Spring Boot · iLink · 智谱 · 高德 · SQLite","textChars":48,"textLines":1,"bbox":[56,430,530,36]}
+{"kind":"textbox","id":"sh/n29sni1o","slide":1,"text":"项目组：__________    汇报人：__________","textPreview":"项目组：__________    汇报人：__________","textChars":32,"textLines":1,"bbox":[56,594,530,32]}
+{"kind":"shape","id":"sh/m10bud0j","slide":1,"bbox":[660,44,564,582]}
+{"kind":"textbox","id":"sh/8zmts7it","slide":1,"text":"01","textPreview":"01","textChars":2,"textLines":1,"bbox":[1180,666,44,22]}
+{"kind":"image","id":"im/sv21gj6h","slide":1,"name":"","geometry":"roundRect","alt":"多模态移动 AI Agent 主视觉","bbox":[660,44,564,582]}
+{"kind":"notes","id":"nt/xgu4u5","slide":1,"text":"开场先给出一句话定位：我们没有停留在问一句答一句，而是完成了一个能感知、能行动、能自主规划并交付结果的微信 AI Agent。\n\n[Sources]\n- D:/ykdSummerText/README.md\n- Generated visual: multimodal-agent-hero.png\n[/Sources]"}
+{"kind":"slide","id":"sl/m7i6sc","slide":2,"title":"SUMMER CAMP PROJECT","textShapes":18}
+{"kind":"textbox","id":"sh/l0zq1cr6","slide":2,"text":"SUMMER CAMP PROJECT","textPreview":"SUMMER CAMP PROJECT","textChars":19,"textLines":1,"bbox":[56,30,360,26]}
+{"kind":"textbox","id":"sh/yx876h8v","slide":2,"text":"我们解决的不是一次问答，而是一整套任务","textPreview":"我们解决的不是一次问答，而是一整套任务","textChars":19,"textLines":1,"bbox":[56,68,1120,66]}
+{"kind":"textbox","id":"sh/jyh8zm9g","slide":2,"text":"02","textPreview":"02","textChars":2,"textLines":1,"bbox":[1180,666,44,22]}
+{"kind":"shape","id":"sh/83qpcrqx","slide":2,"bbox":[56,176,510,406]}
+{"kind":"textbox","id":"sh/t4jq5wri","slide":2,"text":"用户只说最终目标","textPreview":"用户只说最终目标","textChars":8,"textLines":1,"bbox":[86,205,188,34]}
+{"kind":"textbox","id":"sh/6187ah8r","slide":2,"text":"“帮我制定未来 7 天的完整健康生活方案，结合天气、饮食和训练，最后生成结果页面与二维码。”","textPreview":"“帮我制定未来 7 天的完整健康生活方案，结合天气、饮食和训练，最后生成结果页面与二维码。”","textChars":46,"textLines":1,"bbox":[86,270,450,210]}
+{"kind":"textbox","id":"sh/72h83m9c","slide":2,"text":"不提供步骤，不指定工具，不要求用户反复追问。","textPreview":"不提供步骤，不指定工具，不要求用户反复追问。","textChars":22,"textLines":1,"bbox":[86,505,430,46]}
+{"kind":"shape","id":"sh/grapgbqt","slide":2,"bbox":[588,343,70,32]}
+{"kind":"textbox","id":"sh/hsjq9g7e","slide":2,"text":"01","textPreview":"01","textChars":2,"textLines":1,"bbox":[682,182,56,48]}
+{"kind":"textbox","id":"sh/dw7mxsbm","slide":2,"text":"理解","textPreview":"理解","textChars":2,"textLines":1,"bbox":[752,170,170,40]}
+{"kind":"textbox","id":"sh/cvy5onu1","slide":2,"text":"提取目标与约束","textPreview":"提取目标与约束","textChars":7,"textLines":1,"bbox":[752,214,390,32]}
+{"kind":"shape","id":"sh/rup4vitg","slide":2,"bbox":[752,262,390,1]}
+{"kind":"textbox","id":"sh/qtwnmdcv","slide":2,"text":"02","textPreview":"02","textChars":2,"textLines":1,"bbox":[682,290,56,48]}
+{"kind":"textbox","id":"sh/10761sbi","slide":2,"text":"规划","textPreview":"规划","textChars":2,"textLines":1,"bbox":[752,278,170,40]}
+{"kind":"textbox","id":"sh/0zy5snux","slide":2,"text":"拆解依赖与并行步骤","textPreview":"拆解依赖与并行步骤","textChars":9,"textLines":1,"bbox":[752,322,390,32]}
+{"kind":"shape","id":"sh/zyp4z2tc","slide":2,"bbox":[752,370,390,1]}
+{"kind":"textbox","id":"sh/exgnqxc7","slide":2,"text":"03","textPreview":"03","textChars":2,"textLines":1,"bbox":[682,398,56,48]}
+{"kind":"textbox","id":"sh/h4nmp8be","slide":2,"text":"执行","textPreview":"执行","textChars":2,"textLines":1,"bbox":[752,386,170,40]}
+{"kind":"textbox","id":"sh/g3e5g3ut","slide":2,"text":"协作天气、RAG、Skill、Tool","textPreview":"协作天气、RAG、Skill、Tool","textChars":19,"textLines":1,"bbox":[752,430,390,32]}
+{"kind":"shape","id":"sh/8ni5w32p","slide":2,"bbox":[752,478,390,1]}
+{"kind":"textbox","id":"sh/torm58ja","slide":2,"text":"04","textPreview":"04","textChars":2,"textLines":1,"bbox":[682,506,56,48]}
+{"kind":"textbox","id":"sh/6lgnutkj","slide":2,"text":"交付","textPreview":"交付","textChars":2,"textLines":1,"bbox":[752,494,170,40]}
+{"kind":"textbox","id":"sh/7mp43yl4","slide":2,"text":"七日计划、页面与二维码","textPreview":"七日计划、页面与二维码","textChars":11,"textLines":1,"bbox":[752,538,390,32]}
+{"kind":"notes","id":"nt/m7i6sc","slide":2,"text":"强调 Agent 与普通聊天的差别：用户给的是目标，系统负责决定步骤、选择能力并形成最终成品。\n\n[Sources]\n- D:/ykdSummerText/README.md\n- D:/ykdSummerText/src/main/java/com/summercamp/project/agent/AgentRouter.java\n[/Sources]"}
+{"kind":"slide","id":"sl/j63mkh","slide":3,"title":"SUMMER CAMP PROJECT","textShapes":12}
+{"kind":"textbox","id":"sh/3at4v6d8","slide":3,"text":"SUMMER CAMP PROJECT","textPreview":"SUMMER CAMP PROJECT","textChars":19,"textLines":1,"bbox":[56,30,360,26]}
+{"kind":"textbox","id":"sh/4b2lobut","slide":3,"text":"两周迭代让项目完成三次能力跃迁","textPreview":"两周迭代让项目完成三次能力跃迁","textChars":15,"textLines":1,"bbox":[56,68,1120,66]}
+{"kind":"textbox","id":"sh/5cbmxgve","slide":3,"text":"03","textPreview":"03","textChars":2,"textLines":1,"bbox":[1180,666,44,22]}
+{"kind":"shape","id":"sh/qdknqlcz","slide":3,"bbox":[72,344,1136,2]}
+{"kind":"shape","id":"sh/red4zqd4","slide":3,"bbox":[72,337,16,16]}
+{"kind":"textbox","id":"sh/sfm5sbup","slide":3,"text":"第一阶段","textPreview":"第一阶段","textChars":4,"textLines":1,"bbox":[72,278,150,30]}
+{"kind":"textbox","id":"sh/dgvm1gba","slide":3,"text":"Bot 能用","textPreview":"Bot 能用","textChars":6,"textLines":1,"bbox":[72,390,320,42]}
+{"kind":"textbox","id":"sh/eh4nulcv","slide":3,"text":"Spring Boot 项目骨架\n微信二维码登录与长轮询\nSLF4J / Logback / CI","textPreview":"Spring Boot 项目骨架 | 微信二维码登录与长轮询 | SLF4J / Logback / CI","textChars":49,"textLines":3,"bbox":[72,447,320,126]}
+{"kind":"shape","id":"sh/fid43qtg","slide":3,"bbox":[450,337,16,16]}
+{"kind":"textbox","id":"sh/fqxs7qpc","slide":3,"text":"第二阶段","textPreview":"第二阶段","textChars":4,"textLines":1,"bbox":[450,278,150,30]}
+{"kind":"textbox","id":"sh/eporylor","slide":3,"text":"Bot 能感知与行动","textPreview":"Bot 能感知与行动","textChars":10,"textLines":1,"bbox":[450,390,320,42]}
+{"kind":"textbox","id":"sh/1sza907i","slide":3,"text":"文字、图片、语音\n天气与 Function Calling\nTool、Skill、RAG","textPreview":"文字、图片、语音 | 天气与 Function Calling | Tool、Skill、RAG","textChars":44,"textLines":3,"bbox":[450,447,320,126]}
+{"kind":"shape","id":"sh/0rq90v6x","slide":3,"bbox":[828,337,16,16]}
+{"kind":"textbox","id":"sh/rmx83qpg","slide":3,"text":"第三阶段","textPreview":"第三阶段","textChars":4,"textLines":1,"bbox":[828,278,150,30]}
+{"kind":"textbox","id":"sh/qlorulov","slide":3,"text":"Bot 能自主完成任务","textPreview":"Bot 能自主完成任务","textChars":11,"textLines":1,"bbox":[828,390,320,42]}
+{"kind":"textbox","id":"sh/dofq507m","slide":3,"text":"12 步健康规划 Agent\n并行、缓存、Prompt 压缩\nSQLite 续跑与每日提醒","textPreview":"12 步健康规划 Agent | 并行、缓存、Prompt 压缩 | SQLite 续跑与每日提醒","textChars":45,"textLines":3,"bbox":[828,447,320,126]}
+{"kind":"notes","id":"nt/j63mkh","slide":3,"text":"按能力而不是按日期流水账讲述：先打通微信，再补齐多模态与工具体系，最后升级成自主规划 Agent。\n\n[Sources]\n- D:/ykdSummerText/README.md\n- D:/ykdSummerText/src/main/java/com/summercamp/project/Application.java\n[/Sources]"}
+{"kind":"slide","id":"sl/jcsf04","slide":4,"title":"SUMMER CAMP PROJECT","textShapes":27}
+{"kind":"textbox","id":"sh/kz65k3a1","slide":4,"text":"SUMMER CAMP PROJECT","textPreview":"SUMMER CAMP PROJECT","textChars":19,"textLines":1,"bbox":[56,30,360,26]}
+{"kind":"textbox","id":"sh/jyxobytg","slide":4,"text":"统一消息路由把多种能力组织成一条链路","textPreview":"统一消息路由把多种能力组织成一条链路","textChars":18,"textLines":1,"bbox":[56,68,1120,66]}
+{"kind":"textbox","id":"sh/ixonitsv","slide":4,"text":"04","textPreview":"04","textChars":2,"textLines":1,"bbox":[1180,666,44,22]}
+{"kind":"shape","id":"sh/xwf69oba","slide":4,"bbox":[262,345,60,28]}
+{"kind":"shape","id":"sh/wb65gjap","slide":4,"bbox":[558,345,60,28]}
+{"kind":"shape","id":"sh/vaxo7et4","slide":4,"bbox":[888,345,60,28]}
+{"kind":"shape","id":"sh/a9one9sj","slide":4,"bbox":[56,190,205,362]}
+{"kind":"textbox","id":"sh/hsj6l8re","slide":4,"text":"微信输入","textPreview":"微信输入","textChars":4,"textLines":1,"bbox":[82,220,150,36]}
+{"kind":"textbox","id":"sh/g7apsna9","slide":4,"text":"• 文字 + 上下文","textPreview":"• 文字 + 上下文","textChars":10,"textLines":1,"bbox":[82,292,150,34]}
+{"kind":"textbox","id":"sh/ap87i5wz","slide":4,"text":"• 图片 + 问题","textPreview":"• 图片 + 问题","textChars":9,"textLines":1,"bbox":[82,344,150,34]}
+{"kind":"textbox","id":"sh/bqhoradk","slide":4,"text":"• 语音 + 转写","textPreview":"• 语音 + 转写","textChars":9,"textLines":1,"bbox":[82,396,150,34]}
+{"kind":"textbox","id":"sh/wrqpkve5","slide":4,"text":"• 命令 / 媒体","textPreview":"• 命令 / 媒体","textChars":9,"textLines":1,"bbox":[82,448,150,34]}
+{"kind":"shape","id":"sh/xsz6t0vq","slide":4,"bbox":[322,238,236,270]}
+{"kind":"textbox","id":"sh/mlo7elw3","slide":4,"text":"MessageProcessor","textPreview":"MessageProcessor","textChars":16,"textLines":1,"bbox":[347,275,186,40]}
+{"kind":"shape","id":"sh/nmhonqdo","slide":4,"bbox":[352,335,176,3]}
+{"kind":"textbox","id":"sh/onqpgve9","slide":4,"text":"去重 · 限制检查\n命令优先 · 意图识别\n待处理状态 · 统一回复","textPreview":"去重 · 限制检查 | 命令优先 · 意图识别 | 待处理状态 · 统一回复","textChars":34,"textLines":3,"bbox":[347,360,186,108]}
+{"kind":"shape","id":"sh/9oz6p0ve","slide":4,"bbox":[618,170,270,392]}
+{"kind":"textbox","id":"sh/6hs7qpw7","slide":4,"text":"智能编排","textPreview":"智能编排","textChars":4,"textLines":1,"bbox":[646,200,214,38]}
+{"kind":"textbox","id":"sh/7i18zuds","slide":4,"text":"Intent","textPreview":"Intent","textChars":6,"textLines":1,"bbox":[646,260,74,30]}
+{"kind":"textbox","id":"sh/32t4rmt4","slide":4,"text":"本地规则 + 模型兜底","textPreview":"本地规则 + 模型兜底","textChars":11,"textLines":1,"bbox":[728,260,140,30]}
+{"kind":"textbox","id":"sh/21k3ihcj","slide":4,"text":"Skill","textPreview":"Skill","textChars":5,"textLines":1,"bbox":[646,316,74,30]}
+{"kind":"textbox","id":"sh/povmtcba","slide":4,"text":"明确业务流程","textPreview":"明确业务流程","textChars":6,"textLines":1,"bbox":[728,316,140,30]}
+{"kind":"textbox","id":"sh/43mlkrup","slide":4,"text":"RAG","textPreview":"RAG","textChars":3,"textLines":1,"bbox":[646,372,74,30]}
+{"kind":"textbox","id":"sh/rqd4vmtg","slide":4,"text":"可信知识增强","textPreview":"可信知识增强","textChars":6,"textLines":1,"bbox":[728,372,140,30]}
+{"kind":"textbox","id":"sh/qp43mhcv","slide":4,"text":"Tool","textPreview":"Tool","textChars":4,"textLines":1,"bbox":[646,428,74,30]}
+{"kind":"textbox","id":"sh/dsvmxwb6","slide":4,"text":"白名单原子动作","textPreview":"白名单原子动作","textChars":7,"textLines":1,"bbox":[728,428,140,30]}
+{"kind":"textbox","id":"sh/crmloru1","slide":4,"text":"Agent","textPreview":"Agent","textChars":5,"textLines":1,"bbox":[646,484,74,30]}
+{"kind":"textbox","id":"sh/zux4z6tc","slide":4,"text":"规划、执行、评估","textPreview":"规划、执行、评估","textChars":8,"textLines":1,"bbox":[728,484,140,30]}
+{"kind":"shape","id":"sh/et43q1cr","slide":4,"bbox":[948,190,276,362]}
+{"kind":"textbox","id":"sh/wz6lgba5","slide":4,"text":"服务与输出","textPreview":"服务与输出","textChars":5,"textLines":1,"bbox":[976,220,220,38]}
+{"kind":"textbox","id":"sh/x0f29grq","slide":4,"text":"• 智谱：聊天 / 视觉 / 绘图 / ASR","textPreview":"• 智谱：聊天 / 视觉 / 绘图 / ASR","textChars":23,"textLines":1,"bbox":[976,282,220,36]}
+{"kind":"textbox","id":"sh/axo3e1sz","slide":4,"text":"• 高德：行政区与天气","textPreview":"• 高德：行政区与天气","textChars":11,"textLines":1,"bbox":[976,330,220,36]}
+{"kind":"textbox","id":"sh/byxk769k","slide":4,"text":"• Edge TTS：免费语音合成","textPreview":"• Edge TTS：免费语音合成","textChars":17,"textLines":1,"bbox":[976,378,220,36]}
+{"kind":"textbox","id":"sh/ov6lcrat","slide":4,"text":"• SQLite：状态与提醒","textPreview":"• SQLite：状态与提醒","textChars":14,"textLines":1,"bbox":[976,426,220,36]}
+{"kind":"textbox","id":"sh/9wf25wre","slide":4,"text":"• 文本 / 图片 / 音频 / 页面 / 二维码","textPreview":"• 文本 / 图片 / 音频 / 页面 / 二维码","textChars":25,"textLines":1,"bbox":[976,474,220,36]}
+{"kind":"notes","id":"nt/jcsf04","slide":4,"text":"这页只讲一次完整消息路径：微信消息先进入统一路由，再由 Intent、Skill、RAG、Tool 或 Agent 接管，最后调用外部服务并形成多种输出。\n\n[Sources]\n- D:/ykdSummerText/src/main/java/com/summercamp/project/message/MessageProcessor.java\n- D:/ykdSummerText/src/main/java/com/summercamp/project/llm/ZhipuAiClient.java\n[/Sources]"}
+{"kind":"slide","id":"sl/yug3kn","slide":5,"title":"SUMMER CAMP PROJECT","textShapes":12}
+{"kind":"textbox","id":"sh/pcje947e","slide":5,"text":"SUMMER CAMP PROJECT","textPreview":"SUMMER CAMP PROJECT","textChars":19,"textLines":1,"bbox":[56,30,360,26]}
+{"kind":"textbox","id":"sh/29sfe983","slide":5,"text":"三层能力让机器人既能理解，也能执行","textPreview":"三层能力让机器人既能理解，也能执行","textChars":17,"textLines":1,"bbox":[56,68,1120,66]}
+{"kind":"textbox","id":"sh/na1w7upo","slide":5,"text":"05","textPreview":"05","textChars":2,"textLines":1,"bbox":[1180,666,44,22]}
+{"kind":"shape","id":"sh/07axczqx","slide":5,"bbox":[56,214,330,330]}
+{"kind":"shape","id":"sh/18je547i","slide":5,"bbox":[80,180,58,58]}
+{"kind":"textbox","id":"sh/e5sfap8r","slide":5,"text":"01","textPreview":"01","textChars":2,"textLines":1,"bbox":[80,191,58,34]}
+{"kind":"textbox","id":"sh/f61w3upc","slide":5,"text":"多模态交互","textPreview":"多模态交互","textChars":5,"textLines":1,"bbox":[84,265,274,44]}
+{"kind":"shape","id":"sh/s3qx8fq1","slide":5,"bbox":[84,326,82,4]}
+{"kind":"textbox","id":"sh/d4ze1k76","slide":5,"text":"连续文字对话\n图片识别与生成\n语音识别与 MP3 回复\n超限与异常媒体提示","textPreview":"连续文字对话 | 图片识别与生成 | 语音识别与 MP3 回复 | 超限与异常媒体提示","textChars":37,"textLines":4,"bbox":[84,355,274,156]}
+{"kind":"shape","id":"sh/d8bm14z6","slide":5,"bbox":[442,214,330,330]}
+{"kind":"shape","id":"sh/c72lszyl","slide":5,"bbox":[466,180,58,58]}
+{"kind":"textbox","id":"sh/b6t4zuh0","slide":5,"text":"02","textPreview":"02","textChars":2,"textLines":1,"bbox":[466,191,58,34]}
+{"kind":"textbox","id":"sh/q5k3qpgf","slide":5,"text":"可信信息","textPreview":"可信信息","textChars":4,"textLines":1,"bbox":[470,265,274,44]}
+{"kind":"shape","id":"sh/p4bmxkzu","slide":5,"bbox":[470,326,82,4]}
+{"kind":"textbox","id":"sh/oj2lofy9","slide":5,"text":"高德实时与三日天气\n项目 FAQ 与校园知识 RAG\n每用户独立上下文\n固定模板避免事实编造","textPreview":"高德实时与三日天气 | 项目 FAQ 与校园知识 RAG | 每用户独立上下文 | 固定模板避免事实编造","textChars":46,"textLines":4,"bbox":[470,355,274,156]}
+{"kind":"shape","id":"sh/3itkvuho","slide":5,"bbox":[828,214,330,330]}
+{"kind":"shape","id":"sh/2h03mpgj","slide":5,"bbox":[852,180,58,58]}
+{"kind":"textbox","id":"sh/1gr2tkzy","slide":5,"text":"03","textPreview":"03","textChars":2,"textLines":1,"bbox":[852,191,58,34]}
+{"kind":"textbox","id":"sh/gfilkfyd","slide":5,"text":"行动与交付","textPreview":"行动与交付","textChars":5,"textLines":1,"bbox":[856,265,274,44]}
+{"kind":"shape","id":"sh/sjml0f69","slide":5,"bbox":[856,326,82,4]}
+{"kind":"textbox","id":"sh/tkvm9k7u","slide":5,"text":"10 个本地工具\n5 个可注册 Skill\n串行 / 并行多工具\n结果页面与真实二维码","textPreview":"10 个本地工具 | 5 个可注册 Skill | 串行 / 并行多工具 | 结果页面与真实二维码","textChars":43,"textLines":4,"bbox":[856,355,274,156]}
+{"kind":"notes","id":"nt/yug3kn","slide":5,"text":"用三层归纳而不是逐条念功能：多模态解决输入输出，可信信息解决事实来源，行动与交付解决真正完成任务。\n\n[Sources]\n- D:/ykdSummerText/README.md\n- D:/ykdSummerText/src/main/java/com/summercamp/project/message/MessageProcessor.java\n[/Sources]"}
+{"kind":"slide","id":"sl/o61baj","slide":6,"title":"SUMMER CAMP PROJECT","textShapes":18}
+{"kind":"textbox","id":"sh/xc72hgvu","slide":6,"text":"SUMMER CAMP PROJECT","textPreview":"SUMMER CAMP PROJECT","textChars":19,"textLines":1,"bbox":[56,30,360,26]}
+{"kind":"textbox","id":"sh/a9g361w3","slide":6,"text":"Tool、Skill、RAG 分工明确，组合后更智能","textPreview":"Tool、Skill、RAG 分工明确，组合后更智能","textChars":26,"textLines":1,"bbox":[56,68,1120,66]}
+{"kind":"textbox","id":"sh/bapkf6do","slide":6,"text":"06","textPreview":"06","textChars":2,"textLines":1,"bbox":[1180,666,44,22]}
+{"kind":"textbox","id":"sh/kfylcbe5","slide":6,"text":"用户消息","textPreview":"用户消息","textChars":4,"textLines":1,"bbox":[66,190,150,38]}
+{"kind":"shape","id":"sh/lg72lgvq","slide":6,"bbox":[220,196,90,26]}
+{"kind":"textbox","id":"sh/ydg3a1wf","slide":6,"text":"统一路由","textPreview":"统一路由","textChars":4,"textLines":1,"bbox":[326,190,150,38]}
+{"kind":"shape","id":"sh/jepkj6d0","slide":6,"bbox":[476,196,90,26]}
+{"kind":"textbox","id":"sh/0je10re1","slide":6,"text":"按意图选择最短、最可靠的执行路径","textPreview":"按意图选择最短、最可靠的执行路径","textChars":16,"textLines":1,"bbox":[588,190,560,38]}
+{"kind":"shape","id":"sh/1kn29wfm","slide":6,"bbox":[56,274,330,300]}
+{"kind":"textbox","id":"sh/d0r6hsny","slide":6,"text":"Tool","textPreview":"Tool","textChars":4,"textLines":1,"bbox":[82,300,120,48]}
+{"kind":"textbox","id":"sh/szi5onmd","slide":6,"text":"原子动作","textPreview":"原子动作","textChars":4,"textLines":1,"bbox":[206,313,145,30]}
+{"kind":"shape","id":"sh/ry9ofi5s","slide":6,"bbox":[82,362,278,1]}
+{"kind":"textbox","id":"sh/qx0nmx47","slide":6,"text":"计算、天气、时间、待办、图片、二维码、结果页\n\n由模型通过 JSON Schema 选择，本地白名单校验后执行。","textPreview":"计算、天气、时间、待办、图片、二维码、结果页 |  | 由模型通过 JSON Schema 选择，本地白名单校验后执行。","textChars":56,"textLines":3,"bbox":[82,386,278,120]}
+{"kind":"textbox","id":"sh/14r6lcnu","slide":6,"text":"例：计算 125×36","textPreview":"例：计算 125×36","textChars":11,"textLines":1,"bbox":[82,526,278,30]}
+{"kind":"shape","id":"sh/03i5s7mp","slide":6,"bbox":[442,274,330,300]}
+{"kind":"textbox","id":"sh/f29oj254","slide":6,"text":"Skill","textPreview":"Skill","textChars":5,"textLines":1,"bbox":[468,300,120,48]}
+{"kind":"textbox","id":"sh/e10nqx4j","slide":6,"text":"可复用业务流程","textPreview":"可复用业务流程","textChars":7,"textLines":1,"bbox":[592,313,145,30]}
+{"kind":"shape","id":"sh/p8b6pcn6","slide":6,"bbox":[468,362,278,1]}
+{"kind":"textbox","id":"sh/o72pw7ml","slide":6,"text":"增肌饮食、运动健康、冷笑话、快速计算、JSON 格式化\n\n明确关键词优先命中，减少无效模型调用。","textPreview":"增肌饮食、运动健康、冷笑话、快速计算、JSON 格式化 |  | 明确关键词优先命中，减少无效模型调用。","textChars":48,"textLines":3,"bbox":[468,386,278,120]}
+{"kind":"textbox","id":"sh/8nuh8fyt","slide":6,"text":"例：制定增肌饮食计划","textPreview":"例：制定增肌饮食计划","textChars":10,"textLines":1,"bbox":[468,526,278,30]}
+{"kind":"shape","id":"sh/9o3yhkfe","slide":6,"bbox":[828,274,330,300]}
+{"kind":"textbox","id":"sh/mlsz65g3","slide":6,"text":"RAG","textPreview":"RAG","textChars":3,"textLines":1,"bbox":[854,300,120,48]}
+{"kind":"textbox","id":"sh/7mlgfaxo","slide":6,"text":"可信知识上下文","textPreview":"可信知识上下文","textChars":7,"textLines":1,"bbox":[978,313,145,30]}
+{"kind":"shape","id":"sh/wbuhczy5","slide":6,"bbox":[854,362,278,1]}
+{"kind":"textbox","id":"sh/hc3il4fq","slide":6,"text":"项目 FAQ、技术资料、健康知识、河南师范大学资料\n\n先检索最相关内容，再增强 Prompt。","textPreview":"项目 FAQ、技术资料、健康知识、河南师范大学资料 |  | 先检索最相关内容，再增强 Prompt。","textChars":47,"textLines":3,"bbox":[854,386,278,120]}
+{"kind":"textbox","id":"sh/upczapgz","slide":6,"text":"例：API Key 在哪里配置","textPreview":"例：API Key 在哪里配置","textChars":15,"textLines":1,"bbox":[854,526,278,30]}
+{"kind":"notes","id":"nt/o61baj","slide":6,"text":"Tool、Skill、RAG 不是三个同义词。Tool 做动作，Skill 承载流程，RAG 提供依据；统一路由让它们在同一条消息链路中协作。\n\n[Sources]\n- D:/ykdSummerText/src/main/java/com/summercamp/project/tool/ToolRegistry.java\n- D:/ykdSummerText/src/main/java/com/summercamp/project/skill/SkillRegistry.java\n- D:/ykdSummerText/src/main/java/com/summercamp/project/rag/KeywordRagRetriever.java\n[/Sources]"}
+{"kind":"slide","id":"sl/pgbyjv","slide":7,"title":"SUMMER CAMP PROJECT","textShapes":10}
+{"kind":"textbox","id":"sh/yhwz2xwv","slide":7,"text":"SUMMER CAMP PROJECT","textPreview":"SUMMER CAMP PROJECT","textChars":19,"textLines":1,"bbox":[56,30,360,26]}
+{"kind":"textbox","id":"sh/lknixcf6","slide":7,"text":"一个最终目标会被自动拆成 12 个可追踪步骤","textPreview":"一个最终目标会被自动拆成 12 个可追踪步骤","textChars":22,"textLines":1,"bbox":[56,68,1120,66]}
+{"kind":"textbox","id":"sh/kjeh47el","slide":7,"text":"07","textPreview":"07","textChars":2,"textLines":1,"bbox":[1180,666,44,22]}
+{"kind":"shape","id":"sh/bel0r2x4","slide":7,"bbox":[316,370,42,26]}
+{"kind":"shape","id":"sh/adczyxgj","slide":7,"bbox":[682,370,42,26]}
+{"kind":"shape","id":"sh/xg3itsfa","slide":7,"bbox":[56,210,268,350]}
+{"kind":"textbox","id":"sh/wfuh0nep","slide":7,"text":"理解目标","textPreview":"理解目标","textChars":4,"textLines":1,"bbox":[82,240,180,34]}
+{"kind":"textbox","id":"sh/vap03mxo","slide":7,"text":"01 解析自然语言\n02 校验完整性与安全边界","textPreview":"01 解析自然语言 | 02 校验完整性与安全边界","textChars":23,"textLines":2,"bbox":[84,320,212,170]}
+{"kind":"shape","id":"sh/u9gzahw3","slide":7,"bbox":[350,210,340,350]}
+{"kind":"textbox","id":"sh/4z2h0b2t","slide":7,"text":"并行获取依据","textPreview":"并行获取依据","textChars":6,"textLines":1,"bbox":[376,240,180,34]}
+{"kind":"textbox","id":"sh/50vy9gje","slide":7,"text":"03 检索健康 RAG\n04 查询三日天气\n05 计算营养目标","textPreview":"03 检索健康 RAG | 04 查询三日天气 | 05 计算营养目标","textChars":31,"textLines":3,"bbox":[378,320,284,170]}
+{"kind":"shape","id":"sh/ixkzy1kn","slide":7,"bbox":[716,210,508,350]}
+{"kind":"textbox","id":"sh/jytg7618","slide":7,"text":"串行生成与交付","textPreview":"串行生成与交付","textChars":7,"textLines":1,"bbox":[742,240,180,34]}
+{"kind":"textbox","id":"sh/wv2xwb2x","slide":7,"text":"06 生成运动方案   07 生成餐单\n08 组装七日计划   09 完整性评估\n10 可选封面   11 结果页面   12 二维码","textPreview":"06 生成运动方案   07 生成餐单 | 08 组装七日计划   09 完整性评估 | 10 可选封面   11 结果页面   12 二维码","textChars":67,"textLines":3,"bbox":[744,320,452,170]}
+{"kind":"textbox","id":"sh/hwby5wj2","slide":7,"text":"独立步骤并行，依赖步骤串行；每一步都有状态、重试次数和可复用输出。","textPreview":"独立步骤并行，依赖步骤串行；每一步都有状态、重试次数和可复用输出。","textChars":33,"textLines":1,"bbox":[56,600,1120,38]}
+{"kind":"notes","id":"nt/pgbyjv","slide":7,"text":"重点讲依赖关系：RAG、天气和营养彼此独立，因此并行；训练、餐单、组装和评估依赖前一步，因此严格串行。\n\n[Sources]\n- D:/ykdSummerText/src/main/java/com/summercamp/project/agent/planning/TaskPlanner.java\n- D:/ykdSummerText/src/main/java/com/summercamp/project/agent/HealthPlanAgent.java\n[/Sources]"}
+{"kind":"slide","id":"sl/b9g75b","slide":8,"title":"SUMMER CAMP PROJECT","textShapes":17}
+{"kind":"textbox","id":"sh/elofitoj","slide":8,"text":"SUMMER CAMP PROJECT","textPreview":"SUMMER CAMP PROJECT","textChars":19,"textLines":1,"bbox":[56,30,360,26]}
+{"kind":"textbox","id":"sh/1ozyt8na","slide":8,"text":"速度、成本和稳定性被纳入同一套设计","textPreview":"速度、成本和稳定性被纳入同一套设计","textChars":17,"textLines":1,"bbox":[56,68,1120,66]}
+{"kind":"textbox","id":"sh/0n6xk36p","slide":8,"text":"08","textPreview":"08","textChars":2,"textLines":1,"bbox":[1180,666,44,22]}
+{"kind":"shape","id":"sh/nahgvi50","slide":8,"bbox":[60,190,64,64]}
+{"kind":"textbox","id":"sh/298fmdof","slide":8,"text":"快","textPreview":"快","textChars":1,"textLines":1,"bbox":[60,200,64,42]}
+{"kind":"textbox","id":"sh/pczyx8n6","slide":8,"text":"并行执行 + 短期缓存","textPreview":"并行执行 + 短期缓存","textChars":11,"textLines":1,"bbox":[154,190,390,38]}
+{"kind":"textbox","id":"sh/obqxo36l","slide":8,"text":"天气、RAG、营养并行；相同天气与检索结果按 TTL 复用。","textPreview":"天气、RAG、营养并行；相同天气与检索结果按 TTL 复用。","textChars":30,"textLines":1,"bbox":[154,233,800,42]}
+{"kind":"shape","id":"sh/3edwjepw","slide":8,"bbox":[154,283,1010,1]}
+{"kind":"shape","id":"sh/id4fa9ob","slide":8,"bbox":[60,300,64,64]}
+{"kind":"textbox","id":"sh/wbqdgrix","slide":8,"text":"省","textPreview":"省","textChars":1,"textLines":1,"bbox":[60,310,64,42]}
+{"kind":"textbox","id":"sh/xcze9wzi","slide":8,"text":"本地规则 + Prompt 压缩","textPreview":"本地规则 + Prompt 压缩","textChars":16,"textLines":1,"bbox":[154,300,390,38]}
+{"kind":"textbox","id":"sh/a9oveh07","slide":8,"text":"确定意图、身体资料和固定模板不重复消耗模型 Token。","textPreview":"确定意图、身体资料和固定模板不重复消耗模型 Token。","textChars":28,"textLines":1,"bbox":[154,343,800,42]}
+{"kind":"shape","id":"sh/vaxc7mhs","slide":8,"bbox":[154,393,1010,1]}
+{"kind":"shape","id":"sh/kfqdkbi9","slide":8,"bbox":[60,410,64,64]}
+{"kind":"textbox","id":"sh/50zedwzu","slide":8,"text":"稳","textPreview":"稳","textChars":1,"textLines":1,"bbox":[60,420,64,42]}
+{"kind":"textbox","id":"sh/id8vi103","slide":8,"text":"重试、备用模型与降级","textPreview":"重试、备用模型与降级","textChars":10,"textLines":1,"bbox":[154,410,390,38]}
+{"kind":"textbox","id":"sh/jehwb6ho","slide":8,"text":"聊天与视觉模型自动回退；天气、TTS、封面失败不阻断主流程。","textPreview":"聊天与视觉模型自动回退；天气、TTS、封面失败不阻断主流程。","textChars":30,"textLines":1,"bbox":[154,453,800,42]}
+{"kind":"shape","id":"sh/0jmd87ip","slide":8,"bbox":[154,503,1010,1]}
+{"kind":"shape","id":"sh/lkfu1cza","slide":8,"bbox":[60,520,64,64]}
+{"kind":"textbox","id":"sh/1on2p472","slide":8,"text":"续","textPreview":"续","textChars":1,"textLines":1,"bbox":[60,530,64,42]}
+{"kind":"textbox","id":"sh/gne1gz6h","slide":8,"text":"SQLite 断点与提醒持久化","textPreview":"SQLite 断点与提醒持久化","textChars":15,"textLines":1,"bbox":[154,520,390,38]}
+{"kind":"textbox","id":"sh/f25knupw","slide":8,"text":"成功步骤保存；重启后可继续任务并恢复每日健康提醒。","textPreview":"成功步骤保存；重启后可继续任务并恢复每日健康提醒。","textChars":25,"textLines":1,"bbox":[154,563,800,42]}
+{"kind":"shape","id":"sh/e1cje9ob","slide":8,"bbox":[154,613,1010,1]}
+{"kind":"shape","id":"sh/psn2to7y","slide":8,"bbox":[980,188,230,374]}
+{"kind":"textbox","id":"sh/ore1kj6t","slide":8,"text":"结果","textPreview":"结果","textChars":2,"textLines":1,"bbox":[1006,220,180,38]}
+{"kind":"textbox","id":"sh/3q5krep8","slide":8,"text":"更少等待\n更少重复调用\n外部服务失败可降级\n程序重启仍可恢复","textPreview":"更少等待 | 更少重复调用 | 外部服务失败可降级 | 程序重启仍可恢复","textChars":30,"textLines":4,"bbox":[1006,286,180,190]}
+{"kind":"notes","id":"nt/b9g75b","slide":8,"text":"这页对应后期优化成果：不只追求功能跑通，还要控制响应时间、Token 消耗和故障影响范围。\n\n[Sources]\n- D:/ykdSummerText/src/main/java/com/summercamp/project/agent/AgentPromptOptimizer.java\n- D:/ykdSummerText/src/main/java/com/summercamp/project/agent/store/AgentStateDatabase.java\n- D:/ykdSummerText/src/main/java/com/summercamp/project/weather/CachingWeatherClient.java\n[/Sources]"}
+{"kind":"slide","id":"sl/f6yl27","slide":9,"title":"SUMMER CAMP PROJECT","textShapes":19}
+{"kind":"textbox","id":"sh/8bixsf6d","slide":9,"text":"SUMMER CAMP PROJECT","textPreview":"SUMMER CAMP PROJECT","textChars":19,"textLines":1,"bbox":[56,30,360,26]}
+{"kind":"textbox","id":"sh/7q9wju5s","slide":9,"text":"现场演示：一句话触发完整健康规划闭环","textPreview":"现场演示：一句话触发完整健康规划闭环","textChars":18,"textLines":1,"bbox":[56,68,1120,66]}
+{"kind":"textbox","id":"sh/mpgfqpo7","slide":9,"text":"09","textPreview":"09","textChars":2,"textLines":1,"bbox":[1180,666,44,22]}
+{"kind":"shape","id":"sh/lo7ehknm","slide":9,"bbox":[56,180,535,390]}
+{"kind":"textbox","id":"sh/knyxof6h","slide":9,"text":"演示输入","textPreview":"演示输入","textChars":4,"textLines":1,"bbox":[86,210,170,34]}
+{"kind":"textbox","id":"sh/zmpwfa5w","slide":9,"text":"帮我制定未来 7 天完整增肌健康生活方案。性别男，20 岁，175 cm，70 kg，住在宜春市袁州区，每周训练 4 次，每次 60 分钟，每天 4 餐，健康成人、无食物过敏，最后生成结果页面和二维码。","textPreview":"帮我制定未来 7 天完整增肌健康生活方案。性别男，20 岁，175 cm，70 kg，住在宜春市袁州区，每周训练 4 次，每次 60 分钟，每天 4 餐，健康成人、无食物过敏，最后生成结果页面和二维码。","textChars":101,"textLines":1,"bbox":[86,270,470,235]}
+{"kind":"shape","id":"sh/ylgfm5ob","slide":9,"bbox":[606,360,58,30]}
+{"kind":"textbox","id":"sh/xk7ed0nq","slide":9,"text":"最终交付","textPreview":"最终交付","textChars":4,"textLines":1,"bbox":[700,196,190,42]}
+{"kind":"textbox","id":"sh/cjyxkv65","slide":9,"text":"01","textPreview":"01","textChars":2,"textLines":1,"bbox":[700,268,48,34]}
+{"kind":"textbox","id":"sh/mtc7alg7","slide":9,"text":"七日计划","textPreview":"七日计划","textChars":4,"textLines":1,"bbox":[760,264,190,32]}
+{"kind":"textbox","id":"sh/nu58jqxc","slide":9,"text":"每日饮食、训练与恢复安排","textPreview":"每日饮食、训练与恢复安排","textChars":12,"textLines":1,"bbox":[760,299,390,30]}
+{"kind":"textbox","id":"sh/8vepcvyx","slide":9,"text":"02","textPreview":"02","textChars":2,"textLines":1,"bbox":[700,342,48,34]}
+{"kind":"textbox","id":"sh/9wnql0fi","slide":9,"text":"真实依据","textPreview":"真实依据","textChars":4,"textLines":1,"bbox":[760,338,190,32]}
+{"kind":"textbox","id":"sh/ypc761gv","slide":9,"text":"天气、健康 RAG、营养估算","textPreview":"天气、健康 RAG、营养估算","textChars":14,"textLines":1,"bbox":[760,373,390,30]}
+{"kind":"textbox","id":"sh/zql8f6xg","slide":9,"text":"03","textPreview":"03","textChars":2,"textLines":1,"bbox":[700,416,48,34]}
+{"kind":"textbox","id":"sh/0rup8by1","slide":9,"text":"安全检查","textPreview":"安全检查","textChars":4,"textLines":1,"bbox":[760,412,190,32]}
+{"kind":"textbox","id":"sh/ls3qhgfm","slide":9,"text":"年龄范围、健康状况、过敏边界","textPreview":"年龄范围、健康状况、过敏边界","textChars":14,"textLines":1,"bbox":[760,447,390,30]}
+{"kind":"textbox","id":"sh/q1s721gz","slide":9,"text":"04","textPreview":"04","textChars":2,"textLines":1,"bbox":[700,490,48,34]}
+{"kind":"textbox","id":"sh/b218b6xk","slide":9,"text":"可访问成品","textPreview":"可访问成品","textChars":5,"textLines":1,"bbox":[760,486,190,32]}
+{"kind":"textbox","id":"sh/vuxwny90","slide":9,"text":"结果页面 + 手机可扫二维码","textPreview":"结果页面 + 手机可扫二维码","textChars":14,"textLines":1,"bbox":[760,521,390,30]}
+{"kind":"textbox","id":"sh/utovudsf","slide":9,"text":"一句目标 → 自动执行 → 完整成品","textPreview":"一句目标 → 自动执行 → 完整成品","textChars":18,"textLines":1,"bbox":[700,585,470,38]}
+{"kind":"notes","id":"nt/f6yl27","slide":9,"text":"建议现场直接复制左侧话术。等待过程中可以发送“查看任务进度”，完成后扫描二维码展示结果页面。\n\n[Sources]\n- D:/ykdSummerText/README.md\n- D:/ykdSummerText/src/main/java/com/summercamp/project/agent/HealthPlanAgent.java\n[/Sources]"}
+{"kind":"slide","id":"sl/dfc2j6","slide":10,"title":"SUMMER CAMP PROJECT","textShapes":14}
+{"kind":"textbox","id":"sh/vm947e9k","slide":10,"text":"SUMMER CAMP PROJECT","textPreview":"SUMMER CAMP PROJECT","textChars":19,"textLines":1,"bbox":[56,30,360,26]}
+{"kind":"textbox","id":"sh/wnilgja5","slide":10,"text":"功能扩展建立在可重复验证的工程基础上","textPreview":"功能扩展建立在可重复验证的工程基础上","textChars":18,"textLines":1,"bbox":[56,68,1120,66]}
+{"kind":"textbox","id":"sh/x8rm9orq","slide":10,"text":"10","textPreview":"10","textChars":2,"textLines":1,"bbox":[1180,666,44,22]}
+{"kind":"textbox","id":"sh/mhg3a9s3","slide":10,"text":"Java 21 + Spring Boot 4.1 的模块化单体，共编译 126 个主源码文件；GitHub Actions 使用 Java 21 执行完整验证。","textPreview":"Java 21 + Spring Boot 4.1 的模块化单体，共编译 126 个主源码文件；GitHub Actions 使用 Java 21 执行完整验证。","textChars":81,"textLines":1,"bbox":[56,150,1120,58]}
+{"kind":"shape","id":"sh/nipk3et8","slide":10,"bbox":[56,270,330,280]}
+{"kind":"textbox","id":"sh/8jylcjat","slide":10,"text":"154","textPreview":"154","textChars":3,"textLines":1,"bbox":[86,305,270,100]}
+{"kind":"textbox","id":"sh/9krm54be","slide":10,"text":"自动化测试","textPreview":"自动化测试","textChars":5,"textLines":1,"bbox":[86,423,270,38]}
+{"kind":"textbox","id":"sh/ydg36psr","slide":10,"text":"0 失败 · 0 错误","textPreview":"0 失败 · 0 错误","textChars":11,"textLines":1,"bbox":[86,477,270,34]}
+{"kind":"shape","id":"sh/zepkzutc","slide":10,"bbox":[442,270,330,280]}
+{"kind":"textbox","id":"sh/ba903mdw","slide":10,"text":"10","textPreview":"10","textChars":2,"textLines":1,"bbox":[472,305,270,100]}
+{"kind":"textbox","id":"sh/ap0zahcb","slide":10,"text":"本地 Tool","textPreview":"本地 Tool","textChars":7,"textLines":1,"bbox":[472,423,270,38]}
+{"kind":"textbox","id":"sh/xcri5wvm","slide":10,"text":"白名单 + JSON Schema","textPreview":"白名单 + JSON Schema","textChars":17,"textLines":1,"bbox":[472,477,270,34]}
+{"kind":"shape","id":"sh/cbihcruh","slide":10,"bbox":[828,270,330,280]}
+{"kind":"textbox","id":"sh/zet076ds","slide":10,"text":"5","textPreview":"5","textChars":1,"textLines":1,"bbox":[858,305,270,100]}
+{"kind":"textbox","id":"sh/yd0ze1c7","slide":10,"text":"自定义 Skill","textPreview":"自定义 Skill","textChars":9,"textLines":1,"bbox":[858,423,270,38]}
+{"kind":"textbox","id":"sh/lgbi9wvy","slide":10,"text":"规则优先，可独立注册","textPreview":"规则优先，可独立注册","textChars":10,"textLines":1,"bbox":[858,477,270,34]}
+{"kind":"textbox","id":"sh/kf21gbud","slide":10,"text":"另有 12 步 Agent 工作流、4 种健康目标、最多 5 轮 Function Calling 与每轮最多 4 个工具调用。","textPreview":"另有 12 步 Agent 工作流、4 种健康目标、最多 5 轮 Function Calling 与每轮最多 4 个工具调用。","textChars":64,"textLines":1,"bbox":[56,595,1120,42]}
+{"kind":"notes","id":"nt/dfc2j6","slide":10,"text":"用数字证明项目不是演示脚本：154 个测试覆盖路由、工具、Skill、天气、语音、结果页、并行调度和 SQLite 上下文启动。\n\n[Sources]\n- Maven verify output, 2026-08-30\n- D:/ykdSummerText/src/test/java\n- D:/ykdSummerText/src/main/java/com/summercamp/project/llm/ZhipuAiClient.java\n[/Sources]"}
+{"kind":"slide","id":"sl/qrrnu9","slide":11,"title":"SUMMER CAMP PROJECT","textShapes":18}
+{"kind":"textbox","id":"sh/xgfulkbi","slide":11,"text":"SUMMER CAMP PROJECT","textPreview":"SUMMER CAMP PROJECT","textChars":19,"textLines":1,"bbox":[56,30,360,26]}
+{"kind":"textbox","id":"sh/adovq5sr","slide":11,"text":"最大的困难来自真实系统之间的边界","textPreview":"最大的困难来自真实系统之间的边界","textChars":16,"textLines":1,"bbox":[56,68,1120,66]}
+{"kind":"textbox","id":"sh/bexcjatc","slide":11,"text":"11","textPreview":"11","textChars":2,"textLines":1,"bbox":[1180,666,44,22]}
+{"kind":"shape","id":"sh/k36dwfat","slide":11,"bbox":[56,165,1120,54]}
+{"kind":"textbox","id":"sh/l4zepkbe","slide":11,"text":"难点","textPreview":"难点","textChars":2,"textLines":1,"bbox":[78,176,250,30]}
+{"kind":"textbox","id":"sh/yhovupsn","slide":11,"text":"具体表现","textPreview":"具体表现","textChars":4,"textLines":1,"bbox":[350,176,385,30]}
+{"kind":"textbox","id":"sh/z2xcnat8","slide":11,"text":"解决方式","textPreview":"解决方式","textChars":4,"textLines":1,"bbox":[760,176,380,30]}
+{"kind":"shape","id":"sh/07mdkvap","slide":11,"bbox":[56,220,1120,94]}
+{"kind":"textbox","id":"sh/18vud0ba","slide":11,"text":"微信连接与登录状态","textPreview":"微信连接与登录状态","textChars":9,"textLines":1,"bbox":[78,243,250,50]}
+{"kind":"textbox","id":"sh/pw7il8jq","slide":11,"text":"二维码生命周期、网络重置、重复消息","textPreview":"二维码生命周期、网络重置、重复消息","textChars":17,"textLines":1,"bbox":[350,237,385,62]}
+{"kind":"textbox","id":"sh/4vy1s3i5","slide":11,"text":"自动打开二维码、轮询重试、消息去重","textPreview":"自动打开二维码、轮询重试、消息去重","textChars":17,"textLines":1,"bbox":[760,237,380,62]}
+{"kind":"shape","id":"sh/3up0jy1k","slide":11,"bbox":[56,313,1120,1]}
+{"kind":"textbox","id":"sh/2twjqd0z","slide":11,"text":"模型能力与平台波动","textPreview":"模型能力与平台波动","textChars":9,"textLines":1,"bbox":[78,337,250,50]}
+{"kind":"textbox","id":"sh/dk72psjm","slide":11,"text":"文本/视觉/绘图接口不同，可能限流","textPreview":"文本/视觉/绘图接口不同，可能限流","textChars":17,"textLines":1,"bbox":[350,331,385,62]}
+{"kind":"textbox","id":"sh/cjy1wni1","slide":11,"text":"分模型配置、备用模型、统一异常提示","textPreview":"分模型配置、备用模型、统一异常提示","textChars":17,"textLines":1,"bbox":[760,331,380,62]}
+{"kind":"shape","id":"sh/rip0ni1w","slide":11,"bbox":[56,407,1120,1]}
+{"kind":"shape","id":"sh/qxgjud0b","slide":11,"bbox":[56,408,1120,94]}
+{"kind":"textbox","id":"sh/1or2tsjy","slide":11,"text":"语音与媒体格式","textPreview":"语音与媒体格式","textChars":7,"textLines":1,"bbox":[78,431,250,50]}
+{"kind":"textbox","id":"sh/0ni10nid","slide":11,"text":"SILK、PCM、WAV、MP3 与发送兼容","textPreview":"SILK、PCM、WAV、MP3 与发送兼容","textChars":22,"textLines":1,"bbox":[350,425,385,62]}
+{"kind":"textbox","id":"sh/krqlwbqp","slide":11,"text":"优先微信转写，本地转换，TTS 失败回退文字","textPreview":"优先微信转写，本地转换，TTS 失败回退文字","textChars":22,"textLines":1,"bbox":[760,425,380,62]}
+{"kind":"shape","id":"sh/lszmpw7u","slide":11,"bbox":[56,501,1120,1]}
+{"kind":"textbox","id":"sh/yp83u18j","slide":11,"text":"多人分支整合","textPreview":"多人分支整合","textChars":6,"textLines":1,"bbox":[78,525,250,50]}
+{"kind":"textbox","id":"sh/zqh4n6p4","slide":11,"text":"重复工具、接口不一致、配置泄露风险","textPreview":"重复工具、接口不一致、配置泄露风险","textChars":17,"textLines":1,"bbox":[350,519,385,62]}
+{"kind":"textbox","id":"sh/8vql0bql","slide":11,"text":"统一注册表与接口，去重择优，本地配置 Git 忽略","textPreview":"统一注册表与接口，去重择优，本地配置 Git 忽略","textChars":25,"textLines":1,"bbox":[760,519,380,62]}
+{"kind":"shape","id":"sh/twjmtg76","slide":11,"bbox":[56,595,1120,1]}
+{"kind":"notes","id":"nt/qrrnu9","slide":11,"text":"这一页强调真实工程经验：最难的不是写一个算法，而是让微信、模型、天气、语音和团队代码在同一套边界内稳定工作。\n\n[Sources]\n- D:/ykdSummerText/README.md\n- D:/ykdSummerText/src/main/java/com/summercamp/project/wechat/ILinkWechatGateway.java\n- D:/ykdSummerText/src/main/java/com/summercamp/project/speech/WechatAudioConverter.java\n[/Sources]"}
+{"kind":"slide","id":"sl/v2povo","slide":12,"title":"最终结论","textShapes":6}
+{"kind":"textbox","id":"sh/o3qt8fex","slide":12,"text":"最终结论","textPreview":"最终结论","textChars":4,"textLines":1,"bbox":[56,52,180,30]}
+{"kind":"textbox","id":"sh/n2xsfadc","slide":12,"text":"一句目标，\nBot 可以交付完整结果","textPreview":"一句目标， | Bot 可以交付完整结果","textChars":18,"textLines":2,"bbox":[56,150,850,142]}
+{"kind":"shape","id":"sh/21ob65wr","slide":12,"bbox":[56,334,280,6]}
+{"kind":"textbox","id":"sh/10fad0v6","slide":12,"text":"项目已经形成“可对话、可感知、可调用工具、可检索知识、可自主规划、可断点恢复”的完整系统。","textPreview":"项目已经形成“可对话、可感知、可调用工具、可检索知识、可自主规划、可断点恢复”的完整系统。","textChars":45,"textLines":1,"bbox":[56,382,940,80]}
+{"kind":"textbox","id":"sh/0z6t4ve1","slide":12,"text":"下一步：向量 RAG · 更丰富的个人 Skill · 持久化用户画像 · 可观测性与性能评测","textPreview":"下一步：向量 RAG · 更丰富的个人 Skill · 持久化用户画像 · 可观测性与性能评测","textChars":47,"textLines":1,"bbox":[56,520,1080,50]}
+{"kind":"textbox","id":"sh/fexsbadg","slide":12,"text":"Q & A","textPreview":"Q & A","textChars":5,"textLines":1,"bbox":[1030,600,180,54]}
+{"kind":"textbox","id":"sh/edob25wv","slide":12,"text":"12","textPreview":"12","textChars":2,"textLines":1,"bbox":[1180,666,44,22]}
+{"kind":"notes","id":"nt/v2povo","slide":12,"text":"收尾回到开场：项目的核心成果不是功能数量，而是把多种能力组织成了一个能自主完成复杂任务、并且可以稳定恢复的系统。\n\n[Sources]\n- D:/ykdSummerText/README.md\n[/Sources]"}

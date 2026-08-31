@@ -16,6 +16,7 @@ import org.springframework.boot.test.web.server.LocalServerPort;
         webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
         properties = {
             "bot.enabled=false",
+            "agent.persistence.enabled=false",
             "result-page.public-base-url=http://127.0.0.1"
         })
 class ResultPageWebIntegrationTest {
@@ -41,6 +42,8 @@ class ResultPageWebIntegrationTest {
         assertEquals(200, response.statusCode());
         assertTrue(response.headers().firstValue("Content-Type").orElseThrow()
                 .startsWith("text/html"));
+        assertEquals("DENY", response.headers().firstValue("X-Frame-Options").orElseThrow());
+        assertEquals("no-referrer", response.headers().firstValue("Referrer-Policy").orElseThrow());
         assertTrue(response.body().contains("125 * 36"));
         assertTrue(response.body().contains("4500"));
     }

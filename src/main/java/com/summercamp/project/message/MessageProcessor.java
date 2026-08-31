@@ -2,6 +2,7 @@ package com.summercamp.project.message;
 
 import com.summercamp.project.agent.HealthAgentResult;
 import com.summercamp.project.agent.HealthPlanAgent;
+import com.summercamp.project.agent.HealthReminderService;
 import com.summercamp.project.conversation.ConversationMemoryStore;
 import com.summercamp.project.intent.IntentRecognizer;
 import com.summercamp.project.intent.IntentResult;
@@ -64,8 +65,12 @@ public class MessageProcessor {
             13. 发送“计算 125*36”：直接使用本地计算 Skill
             14. 项目配置和河南师范大学问题会先检索本地知识库，再由模型回答
             15. 发送“帮我制定未来7天的完整增肌健康生活方案”：启动自主规划 Agent，自动协作天气、RAG、营养、运动、结果页和二维码
-            16. /clear：清除当前用户的对话记录、待补充意图和 Agent 状态
-            17. /help：查看本帮助
+            16. Agent 中断后发送“继续刚才的健康计划”：从失败步骤继续，不重复已完成的查询
+            17. 发送“查看任务进度”：查看 Agent 已完成步骤和当前阶段
+            18. 发送“取消健康计划”：取消 Agent 任务并清除对应提醒
+            19. 发送“开启每日健康提醒 07:30”：每天定时推送当前计划；发送“关闭健康提醒”可取消
+            20. /clear：清除当前用户的对话记录、待补充意图、提醒和 Agent 状态
+            21. /help：查看本帮助
             当前版本暂不处理文件和视频。
             """;
 
@@ -83,6 +88,7 @@ public class MessageProcessor {
     private final ConversationMemoryStore memoryStore;
     private final MessageDeduplicator deduplicator;
     private final HealthPlanAgent healthPlanAgent;
+    private final HealthReminderService healthReminderService;
 
     public MessageProcessor(
             WechatGateway gateway,
@@ -98,7 +104,8 @@ public class MessageProcessor {
             RagRetriever ragRetriever,
             ConversationMemoryStore memoryStore,
             MessageDeduplicator deduplicator,
-            HealthPlanAgent healthPlanAgent) {
+            HealthPlanAgent healthPlanAgent,
+            HealthReminderService healthReminderService) {
         this.gateway = gateway;
         this.chatClient = chatClient;
         this.imageClient = imageClient;
@@ -113,6 +120,7 @@ public class MessageProcessor {
         this.memoryStore = memoryStore;
         this.deduplicator = deduplicator;
         this.healthPlanAgent = healthPlanAgent;
+        this.healthReminderService = healthReminderService;
     }
 
     public void process(InboundMessage message) {
@@ -137,6 +145,14 @@ public class MessageProcessor {
             LOGGER.error("处理微信消息时发生未预期错误", exception);
             safeSendText(message.userId(), "抱歉，处理消息时发生错误，请稍后再试。");
         }
+    }
+
+    public boolean isAgentControlMessage(InboundMessage message) {
+        if (message == null || !message.images().isEmpty() || !message.voices().isEmpty()) {
+            return false;
+        }
+        String command = message.text().strip();
+        return isAgentProgressCommand(command) || isAgentCancellationCommand(command);
     }
 
     private void route(InboundMessage original) throws IOException {
@@ -168,11 +184,35 @@ public class MessageProcessor {
             pendingWeatherStore.clear(message.userId());
             pendingSkillStore.clear(message.userId());
             healthPlanAgent.clear(message.userId());
-            sendReply(message, "已清除你的对话上下文、待处理请求和 Agent 运行状态。");
+            healthReminderService.clear(message.userId());
+            sendReply(message, "已清除你的对话上下文、待处理请求、健康提醒和 Agent 运行状态。");
             return;
         }
         if ("/help".equalsIgnoreCase(command)) {
             sendReply(message, HELP_TEXT);
+            return;
+        }
+        if (isAgentProgressCommand(command)) {
+            sendReply(message, healthPlanAgent.progress(message.userId()));
+            return;
+        }
+        if (isAgentCancellationCommand(command)) {
+            boolean cancelled = healthPlanAgent.cancel(message.userId());
+            healthReminderService.clear(message.userId());
+            sendReply(message, cancelled
+                    ? "已取消健康规划任务，并清除对应断点、计划和提醒。"
+                    : "当前没有可以取消的健康规划任务。");
+            return;
+        }
+        Optional<String> reminderReply = healthReminderService.handleCommand(message.userId(), command);
+        if (reminderReply.isPresent()) {
+            sendReply(message, reminderReply.get());
+            return;
+        }
+        if (isResumeCommand(command)) {
+            pendingWeatherStore.clear(message.userId());
+            pendingSkillStore.clear(message.userId());
+            executeHealthAgentResume(message);
             return;
         }
         if (healthPlanAgent.hasPending(message.userId()) || healthPlanAgent.supports(command)) {
@@ -193,7 +233,8 @@ public class MessageProcessor {
             pendingWeatherStore.clear(message.userId());
             pendingSkillStore.clear(message.userId());
             healthPlanAgent.clear(message.userId());
-            sendReply(message, "已清除你的对话上下文、待处理请求和 Agent 运行状态。");
+            healthReminderService.clear(message.userId());
+            sendReply(message, "已清除你的对话上下文、待处理请求、健康提醒和 Agent 运行状态。");
             return;
         }
         if (intent.type() == IntentType.HELP) {
@@ -331,6 +372,17 @@ public class MessageProcessor {
         LOGGER.info("执行健康生活规划 Agent");
         HealthAgentResult result = healthPlanAgent.execute(
                 message.userId(), message.text(), memoryStore.history(message.userId()));
+        sendHealthAgentResult(message, result);
+    }
+
+    private void executeHealthAgentResume(InboundMessage message) throws IOException {
+        LOGGER.info("继续健康生活规划 Agent");
+        HealthAgentResult result = healthPlanAgent.resume(
+                message.userId(), memoryStore.history(message.userId()));
+        sendHealthAgentResult(message, result);
+    }
+
+    private void sendHealthAgentResult(InboundMessage message, HealthAgentResult result) throws IOException {
         if (!result.reply().isBlank()) {
             sendReply(message, result.reply());
         }
@@ -509,6 +561,27 @@ public class MessageProcessor {
 
     private boolean isCancellation(String command) {
         return "取消".equals(command) || "算了".equals(command) || "不用了".equals(command);
+    }
+
+    private boolean isResumeCommand(String command) {
+        return "继续刚才的健康计划".equals(command)
+                || "继续健康计划".equals(command)
+                || "继续刚才的任务".equals(command);
+    }
+
+    private boolean isAgentProgressCommand(String command) {
+        return "查看任务进度".equals(command)
+                || "查看健康计划进度".equals(command)
+                || "健康计划进度".equals(command)
+                || "任务进度".equals(command)
+                || "查看进度".equals(command);
+    }
+
+    private boolean isAgentCancellationCommand(String command) {
+        return "取消健康计划".equals(command)
+                || "取消任务".equals(command)
+                || "停止健康计划".equals(command)
+                || "停止任务".equals(command);
     }
 
     private void safeSendText(String userId, String text) {

@@ -33,5 +33,9 @@ class HealthPlanPageControllerTest {
         assertThat(response.getBody()).contains("第1天：训练 &amp; 恢复", "七日计划 &lt;script&gt;");
         assertThat(response.getBody()).doesNotContain("<script>");
         assertThat(response.getHeaders().getFirst("X-Content-Type-Options")).isEqualTo("nosniff");
+        assertThat(response.getHeaders().getFirst("X-Frame-Options")).isEqualTo("DENY");
+        assertThat(response.getHeaders().getFirst("Referrer-Policy")).isEqualTo("no-referrer");
+        assertThat(response.getHeaders().getFirst("Content-Security-Policy"))
+                .contains("default-src 'none'", "frame-ancestors 'none'");
     }
 }
